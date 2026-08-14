@@ -1,2 +1,4 @@
 # 不上传 example 目录
 /example/
+# 本地解析产物目录（不上传）
+/analysis/
