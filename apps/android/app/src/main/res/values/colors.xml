@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="eprint_green">#173F37</color>
+    <color name="eprint_green_dark">#102F29</color>
+    <color name="eprint_coral">#E66F43</color>
+    <color name="eprint_coral_dark">#CE5830</color>
+    <color name="eprint_paper">#FFFDF8</color>
+    <color name="eprint_surface">#F3F1EB</color>
+    <color name="eprint_line">#DCD9CF</color>
+    <color name="eprint_text">#18332D</color>
+    <color name="eprint_muted">#667670</color>
+</resources>

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">EPrint v1.3</string>
+    <string name="offline_badge">本机离线</string>
+    <string name="printer_disconnected">未连接打印机</string>
+    <string name="scan_qr">扫描二维码/条形码</string>
+    <string name="add_text">添加文本</string>
+    <string name="preview">点阵预览</string>
+    <string name="print_label">打印标签</string>
+    <string name="canvas_size">画布尺寸（毫米）</string>
+    <string name="text_content">文本内容</string>
+</resources>

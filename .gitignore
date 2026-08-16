@@ -1,4 +1,28 @@
-# 不上传 example 目录
+# Local build toolchains
+/.tools/
+
+# Local archives, reverse-engineering inputs and scratch data
+/backup/
 /example/
-# 本地解析产物目录（不上传）
 /analysis/
+
+# Generated install packages and on-device validation captures
+/artifacts/
+
+# Generated dependencies and build outputs
+**/node_modules/
+**/dist/
+**/.gradle/
+**/build/
+**/local.properties
+*.log
+
+# Private signing material
+*.jks
+*.keystore
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

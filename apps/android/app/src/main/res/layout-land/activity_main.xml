@@ -1,0 +1,680 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/eprint_surface"
+    android:orientation="horizontal">
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:background="@color/eprint_green"
+        android:orientation="vertical"
+        android:padding="12dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="EPRINT"
+                android:textColor="@color/eprint_paper"
+                android:textSize="24sp"
+                android:textStyle="bold" />
+
+            <Spinner
+                android:id="@+id/workModeSpinner"
+                android:layout_width="136dp"
+                android:layout_height="38dp"
+                android:layout_marginStart="10dp"
+                android:background="@drawable/button_secondary"
+                android:contentDescription="选择工作模式"
+                android:paddingStart="10dp"
+                android:paddingEnd="6dp" />
+
+            <Space
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="左 1 / 扫码解析"
+                android:textColor="#BFE3D8"
+                android:textSize="11sp" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/offlineStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="● 正在载入 · 本机离线工作"
+            android:textColor="#BFE3D8"
+            android:textSize="11sp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="5dp"
+            android:text="摄像头扫码与离线解析"
+            android:textColor="@color/eprint_paper"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+        <com.journeyapps.barcodescanner.DecoratedBarcodeView
+            android:id="@+id/barcodeScanner"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_marginTop="6dp"
+            android:layout_weight="1"
+            android:background="#071512"
+            app:zxing_use_texture_view="true" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="44dp"
+            android:layout_marginTop="6dp"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/scanButton"
+                android:layout_width="0dp"
+                android:layout_height="44dp"
+                android:layout_marginEnd="4dp"
+                android:layout_weight="1"
+                android:background="@drawable/button_primary"
+                android:minHeight="0dp"
+                android:minWidth="0dp"
+                android:text="暂停摄像头"
+                android:textAllCaps="false"
+                android:textColor="@color/eprint_paper" />
+
+            <com.otool.eprint.view.BarcodeModeSwitch
+                android:id="@+id/scanModeSwitch"
+                android:layout_width="0dp"
+                android:layout_height="44dp"
+                android:layout_marginStart="4dp"
+                android:layout_weight="1"
+                android:importantForAccessibility="yes" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="176dp"
+            android:layout_marginTop="6dp"
+            android:background="@drawable/card_background"
+            android:orientation="horizontal"
+            android:padding="8dp">
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_marginEnd="5dp"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="扫码原文"
+                    android:textColor="@color/eprint_text"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+
+                <ScrollView
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:layout_weight="1">
+
+                    <TextView
+                        android:id="@+id/qrResultText"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="等待扫码…"
+                        android:textColor="@color/eprint_muted"
+                        android:textIsSelectable="true"
+                        android:textSize="12sp" />
+                </ScrollView>
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_marginStart="5dp"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="本机解析"
+                    android:textColor="@color/eprint_text"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+
+                <ScrollView
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:layout_weight="1">
+
+                    <TextView
+                        android:id="@+id/qrParseSummary"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="全部解析在本机完成"
+                        android:textColor="@color/eprint_muted"
+                        android:textIsSelectable="true"
+                        android:textSize="12sp" />
+                </ScrollView>
+            </LinearLayout>
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- 右 2/3：固定高度工作台，主界面无纵向滚动。 -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="2"
+        android:orientation="vertical">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/header_background"
+            android:orientation="vertical"
+            android:paddingStart="10dp"
+            android:paddingTop="7dp"
+            android:paddingEnd="10dp"
+            android:paddingBottom="7dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/modeContextTitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="普通标签工作台"
+                    android:textColor="@color/eprint_paper"
+                    android:textSize="17sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/connectionIndicator"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="10dp"
+                    android:paddingStart="8dp"
+                    android:paddingTop="3dp"
+                    android:paddingEnd="8dp"
+                    android:paddingBottom="3dp"
+                    android:text="● 未连接"
+                    android:textColor="#FFFFFF"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/printerStatus"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:layout_weight="1"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:text="尚未选择打印机"
+                    android:textColor="#D7E8E2"
+                    android:textSize="12sp" />
+
+                <Button
+                    android:id="@+id/connectButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="38dp"
+                    android:background="@drawable/button_primary"
+                    android:minHeight="0dp"
+                    android:minWidth="0dp"
+                    android:text="自动找打印机"
+                    android:textAllCaps="false"
+                    android:textColor="@color/eprint_paper" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="38dp"
+                android:layout_marginTop="3dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/printerStatusDetail"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="8dp"
+                    android:layout_weight="2.2"
+                    android:ellipsize="end"
+                    android:maxLines="2"
+                    android:text="自动发现后，由用户点击指定设备才连接"
+                    android:textColor="#AFCBC3"
+                    android:textSize="10sp" />
+
+                <Button
+                    android:id="@+id/diagnosticsButton"
+                    android:layout_width="0dp"
+                    android:layout_height="34dp"
+                    android:layout_marginEnd="2dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/button_secondary"
+                    android:minHeight="0dp"
+                    android:minWidth="0dp"
+                    android:text="诊断"
+                    android:textAllCaps="false" />
+
+                <Button
+                    android:id="@+id/disconnectButton"
+                    android:layout_width="0dp"
+                    android:layout_height="34dp"
+                    android:layout_marginStart="2dp"
+                    android:layout_marginEnd="2dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/button_secondary"
+                    android:minHeight="0dp"
+                    android:minWidth="0dp"
+                    android:text="断开"
+                    android:textAllCaps="false" />
+
+                <Button
+                    android:id="@+id/retryJobButton"
+                    android:layout_width="0dp"
+                    android:layout_height="34dp"
+                    android:layout_marginStart="2dp"
+                    android:layout_marginEnd="2dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/button_secondary"
+                    android:minHeight="0dp"
+                    android:minWidth="0dp"
+                    android:text="重试"
+                    android:textAllCaps="false" />
+
+                <Button
+                    android:id="@+id/cancelJobButton"
+                    android:layout_width="0dp"
+                    android:layout_height="34dp"
+                    android:layout_marginStart="2dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/button_secondary"
+                    android:minHeight="0dp"
+                    android:minWidth="0dp"
+                    android:text="取消"
+                    android:textAllCaps="false"
+                    android:textColor="@color/eprint_coral_dark" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:baselineAligned="false"
+            android:orientation="horizontal"
+            android:padding="8dp">
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_marginEnd="4dp"
+                android:layout_weight="1.35"
+                android:background="@drawable/card_background"
+                android:orientation="vertical"
+                android:padding="8dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="38dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="标签实时预览"
+                        android:textColor="@color/eprint_text"
+                        android:textSize="15sp"
+                        android:textStyle="bold" />
+
+                    <Button
+                        android:id="@+id/addTextButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="34dp"
+                        android:background="@drawable/button_secondary"
+                        android:minHeight="0dp"
+                        android:minWidth="0dp"
+                        android:text="添加文本"
+                        android:textAllCaps="false" />
+                </LinearLayout>
+
+                <com.otool.eprint.view.LabelCanvasView
+                    android:id="@+id/labelCanvas"
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:layout_marginTop="4dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/canvas_background"
+                    android:contentDescription="标签编辑画布" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_marginStart="4dp"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <LinearLayout
+                    android:id="@+id/componentPanel"
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:layout_marginBottom="6dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/card_background"
+                    android:orientation="vertical"
+                    android:padding="8dp"
+                    android:visibility="gone">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="40dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="供应商识别"
+                            android:textColor="@color/eprint_text"
+                            android:textStyle="bold" />
+
+                        <Spinner
+                            android:id="@+id/supplierSpinner"
+                            android:layout_width="0dp"
+                            android:layout_height="38dp"
+                            android:layout_marginStart="8dp"
+                            android:layout_weight="1"
+                            android:background="@drawable/button_secondary"
+                            android:paddingStart="8dp"
+                            android:paddingEnd="4dp" />
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/componentRecordSummary"
+                        android:layout_width="match_parent"
+                        android:layout_height="0dp"
+                        android:layout_marginTop="4dp"
+                        android:layout_weight="1"
+                        android:ellipsize="end"
+                        android:maxLines="8"
+                        android:text="等待供应商贴纸二维码；识别后自动生成器件标签"
+                        android:textColor="@color/eprint_muted"
+                        android:textIsSelectable="true"
+                        android:textSize="12sp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/textEditorCard"
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:layout_marginBottom="6dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/card_background"
+                    android:orientation="vertical"
+                    android:padding="8dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="所选文本"
+                        android:textColor="@color/eprint_text"
+                        android:textStyle="bold" />
+
+                    <EditText
+                        android:id="@+id/textInput"
+                        android:layout_width="match_parent"
+                        android:layout_height="0dp"
+                        android:layout_marginTop="2dp"
+                        android:layout_weight="1"
+                        android:gravity="top|start"
+                        android:hint="文本内容"
+                        android:inputType="textMultiLine"
+                        android:minHeight="54dp" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="40dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <EditText
+                            android:id="@+id/fontSizeInput"
+                            android:layout_width="58dp"
+                            android:layout_height="40dp"
+                            android:hint="字号"
+                            android:inputType="numberDecimal"
+                            android:maxLines="1" />
+
+                        <CheckBox
+                            android:id="@+id/boldCheck"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="粗体" />
+
+                        <Spinner
+                            android:id="@+id/alignmentSpinner"
+                            android:layout_width="0dp"
+                            android:layout_height="40dp"
+                            android:layout_weight="1" />
+
+                        <Button
+                            android:id="@+id/deleteTextButton"
+                            android:layout_width="wrap_content"
+                            android:layout_height="34dp"
+                            android:background="@drawable/button_secondary"
+                            android:minHeight="0dp"
+                            android:minWidth="0dp"
+                            android:text="删除"
+                            android:textAllCaps="false"
+                            android:textColor="@color/eprint_coral_dark" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/card_background"
+                    android:orientation="vertical"
+                    android:padding="8dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="40dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <Spinner
+                            android:id="@+id/profileSpinner"
+                            android:layout_width="0dp"
+                            android:layout_height="40dp"
+                            android:layout_weight="1" />
+
+                        <Button
+                            android:id="@+id/profileSettingsButton"
+                            android:layout_width="wrap_content"
+                            android:layout_height="34dp"
+                            android:background="@drawable/button_secondary"
+                            android:minHeight="0dp"
+                            android:minWidth="0dp"
+                            android:text="设备配置"
+                            android:textAllCaps="false" />
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/profileSummary"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:ellipsize="end"
+                        android:maxLines="2"
+                        android:textColor="@color/eprint_muted"
+                        android:textSize="10sp" />
+
+                    <TextView
+                        android:id="@+id/compatibilityWarning"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:maxLines="2"
+                        android:textColor="@color/eprint_coral_dark"
+                        android:textSize="10sp"
+                        android:textStyle="bold"
+                        android:visibility="gone" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="40dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <EditText
+                            android:id="@+id/widthInput"
+                            android:layout_width="0dp"
+                            android:layout_height="40dp"
+                            android:layout_weight="1"
+                            android:hint="宽 mm"
+                            android:inputType="numberDecimal"
+                            android:maxLines="1" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:padding="3dp"
+                            android:text="×" />
+
+                        <EditText
+                            android:id="@+id/heightInput"
+                            android:layout_width="0dp"
+                            android:layout_height="40dp"
+                            android:layout_weight="1"
+                            android:hint="高 mm"
+                            android:inputType="numberDecimal"
+                            android:maxLines="1" />
+
+                        <Spinner
+                            android:id="@+id/dpiSpinner"
+                            android:layout_width="106dp"
+                            android:layout_height="40dp" />
+
+                        <Button
+                            android:id="@+id/applySizeButton"
+                            android:layout_width="wrap_content"
+                            android:layout_height="34dp"
+                            android:background="@drawable/button_secondary"
+                            android:minHeight="0dp"
+                            android:minWidth="0dp"
+                            android:text="应用"
+                            android:textAllCaps="false" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="36dp"
+                        android:orientation="horizontal">
+
+                        <Button
+                            android:id="@+id/presetSmallButton"
+                            android:layout_width="0dp"
+                            android:layout_height="34dp"
+                            android:layout_marginEnd="2dp"
+                            android:layout_weight="1"
+                            android:background="@drawable/button_secondary"
+                            android:minHeight="0dp"
+                            android:minWidth="0dp"
+                            android:text="20×10"
+                            android:textAllCaps="false" />
+
+                        <Button
+                            android:id="@+id/presetMediumButton"
+                            android:layout_width="0dp"
+                            android:layout_height="34dp"
+                            android:layout_marginStart="2dp"
+                            android:layout_marginEnd="2dp"
+                            android:layout_weight="1"
+                            android:background="@drawable/button_secondary"
+                            android:minHeight="0dp"
+                            android:minWidth="0dp"
+                            android:text="25×15"
+                            android:textAllCaps="false" />
+
+                        <Button
+                            android:id="@+id/presetLargeButton"
+                            android:layout_width="0dp"
+                            android:layout_height="34dp"
+                            android:layout_marginStart="2dp"
+                            android:layout_weight="1"
+                            android:background="@drawable/button_secondary"
+                            android:minHeight="0dp"
+                            android:minWidth="0dp"
+                            android:text="40×30"
+                            android:textAllCaps="false" />
+                    </LinearLayout>
+                </LinearLayout>
+            </LinearLayout>
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="50dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:paddingBottom="6dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="右 2 / 固定工作台 · 全部离线"
+                android:textColor="@color/eprint_muted"
+                android:textSize="10sp" />
+
+            <Button
+                android:id="@+id/previewButton"
+                android:layout_width="150dp"
+                android:layout_height="42dp"
+                android:layout_marginEnd="4dp"
+                android:background="@drawable/button_secondary"
+                android:minHeight="0dp"
+                android:minWidth="0dp"
+                android:text="点阵预览"
+                android:textAllCaps="false" />
+
+            <Button
+                android:id="@+id/printButton"
+                android:layout_width="190dp"
+                android:layout_height="42dp"
+                android:layout_marginStart="4dp"
+                android:background="@drawable/button_primary"
+                android:minHeight="0dp"
+                android:minWidth="0dp"
+                android:text="打印标签"
+                android:textAllCaps="false"
+                android:textColor="@color/eprint_paper" />
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>

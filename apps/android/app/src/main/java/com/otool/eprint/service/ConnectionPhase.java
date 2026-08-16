@@ -1,0 +1,17 @@
+package com.otool.eprint.service;
+
+public enum ConnectionPhase {
+    IDLE,
+    CONNECTING,
+    TRANSPORT_CONNECTED,
+    PROTOCOL_NEGOTIATING,
+    PRINTER_READY,
+    SENDING,
+    WAITING_RECEIPT,
+    PRINT_FAILED,
+    CONNECTED,
+    RECONNECT_WAIT,
+    WAITING_FOR_HARDWARE,
+    MANUAL_DISCONNECTED,
+    SERVICE_STOPPED
+}

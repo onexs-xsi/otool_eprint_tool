@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.EPrint" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="colorPrimary">@color/eprint_green</item>
+        <item name="colorPrimaryDark">@color/eprint_green_dark</item>
+        <item name="colorAccent">@color/eprint_coral</item>
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:statusBarColor">@color/eprint_green_dark</item>
+        <item name="android:navigationBarColor">@color/eprint_paper</item>
+        <item name="android:windowActionModeOverlay">true</item>
+    </style>
+</resources>
