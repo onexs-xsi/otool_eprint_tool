@@ -38,6 +38,7 @@ import com.otool.eprint.protocol.ProtocolType;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -78,10 +79,19 @@ public final class BluetoothPrinterManager {
 
     private static final UUID SPP_UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
     private static final UUID CCCD_UUID = UUID.fromString("00002902-0000-1000-8000-00805F9B34FB");
+    private static final UUID P1_MICROCHIP_SERVICE = UUID.fromString("49535343-FE7D-4AE5-8FA9-9FAFD205E455");
     private static final UUID P1_NOTIFY_UUID = UUID.fromString("49535343-1E4D-4BD9-BA61-23C647249616");
+    private static final UUID DOTHAN_FF00_SERVICE = UUID.fromString("0000FF00-0000-1000-8000-00805F9B34FB");
+    private static final UUID DOTHAN_FF01_NOTIFY = UUID.fromString("0000FF01-0000-1000-8000-00805F9B34FB");
+    private static final UUID FFE0_SERVICE = UUID.fromString("0000FFE0-0000-1000-8000-00805F9B34FB");
+    private static final UUID FFE1_CHARACTERISTIC = UUID.fromString("0000FFE1-0000-1000-8000-00805F9B34FB");
+    private static final UUID DEVICE_INFORMATION_SERVICE = UUID.fromString("0000180A-0000-1000-8000-00805F9B34FB");
+    private static final UUID MODEL_NUMBER = UUID.fromString("00002A24-0000-1000-8000-00805F9B34FB");
+    private static final UUID FIRMWARE_REVISION = UUID.fromString("00002A28-0000-1000-8000-00805F9B34FB");
     private static final long CONNECT_TIMEOUT_SECONDS = 14;
     private static final long BLE_SCAN_MILLIS = 10_000;
     private static final long BLE_WRITE_TIMEOUT_SECONDS = 5;
+    private static final long DEVICE_INFO_READ_TIMEOUT_MILLIS = 1_200;
 
     private final Context appContext;
     private final BluetoothAdapter adapter;
@@ -107,6 +117,8 @@ public final class BluetoothPrinterManager {
     private volatile boolean readingClassic;
     private volatile String discoveredGattSummary = "未发现";
     private volatile boolean notificationsSubscribed;
+    private volatile String deviceInfoModel = "未读取";
+    private volatile String deviceInfoSoftware = "未读取";
     private StateListener stateListener;
     private DataListener dataListener;
     private ScanCallback scanCallback;
@@ -289,6 +301,9 @@ public final class BluetoothPrinterManager {
     private BluetoothGattCallback createGattCallback(DeviceCandidate candidate, Callback callback) {
         return new BluetoothGattCallback() {
             private boolean readyDelivered;
+            private boolean deviceInfoStarted;
+            private volatile int expectedDeviceInfoRead;
+            private volatile int deviceInfoReadGeneration;
 
             @SuppressLint("MissingPermission")
             @Override
@@ -334,6 +349,22 @@ public final class BluetoothPrinterManager {
 
             @SuppressLint("MissingPermission")
             @Override
+            public void onCharacteristicRead(BluetoothGatt bluetoothGatt,
+                                             BluetoothGattCharacteristic characteristic,
+                                             int status) {
+                handleDeviceInfoRead(bluetoothGatt, characteristic,
+                        characteristic.getValue(), status);
+            }
+
+            @Override
+            public void onCharacteristicRead(BluetoothGatt bluetoothGatt,
+                                             BluetoothGattCharacteristic characteristic,
+                                             byte[] value, int status) {
+                handleDeviceInfoRead(bluetoothGatt, characteristic, value, status);
+            }
+
+            @SuppressLint("MissingPermission")
+            @Override
             public void onMtuChanged(BluetoothGatt bluetoothGatt, int mtu, int status) {
                 if (status == BluetoothGatt.GATT_SUCCESS) negotiatedMtu = mtu;
                 enableNotificationsThenReady(bluetoothGatt);
@@ -353,7 +384,7 @@ public final class BluetoothPrinterManager {
                     } else {
                         notificationsSubscribed = true;
                     }
-                    finishReady(bluetoothGatt);
+                    readDeviceInfoThenReady(bluetoothGatt);
                 }
             }
 
@@ -384,8 +415,77 @@ public final class BluetoothPrinterManager {
                         fail(callback, "P1 私有协议需要 BLE Notify，但通知特征或 CCCD 未就绪");
                         closeBle(bluetoothGatt);
                     } else {
-                        finishReady(bluetoothGatt);
+                        readDeviceInfoThenReady(bluetoothGatt);
                     }
+                }
+            }
+
+            @SuppressLint("MissingPermission")
+            private void readDeviceInfoThenReady(BluetoothGatt bluetoothGatt) {
+                if (gatt != bluetoothGatt || readyDelivered || deviceInfoStarted) return;
+                deviceInfoStarted = true;
+                BluetoothGattService service = bluetoothGatt.getService(DEVICE_INFORMATION_SERVICE);
+                BluetoothGattCharacteristic model = service == null
+                        ? null : service.getCharacteristic(MODEL_NUMBER);
+                if (model != null) {
+                    expectedDeviceInfoRead = 1;
+                    if (bluetoothGatt.readCharacteristic(model)) {
+                        scheduleDeviceInfoReadTimeout(bluetoothGatt);
+                        return;
+                    }
+                    expectedDeviceInfoRead = 0;
+                }
+                readSoftwareThenReady(bluetoothGatt);
+            }
+
+            @SuppressLint("MissingPermission")
+            private void readSoftwareThenReady(BluetoothGatt bluetoothGatt) {
+                BluetoothGattService service = bluetoothGatt.getService(DEVICE_INFORMATION_SERVICE);
+                BluetoothGattCharacteristic software = service == null
+                        ? null : service.getCharacteristic(FIRMWARE_REVISION);
+                if (software != null) {
+                    expectedDeviceInfoRead = 2;
+                    if (bluetoothGatt.readCharacteristic(software)) {
+                        scheduleDeviceInfoReadTimeout(bluetoothGatt);
+                        return;
+                    }
+                    expectedDeviceInfoRead = 0;
+                }
+                finishReady(bluetoothGatt);
+            }
+
+            private void scheduleDeviceInfoReadTimeout(BluetoothGatt bluetoothGatt) {
+                int generation = ++deviceInfoReadGeneration;
+                mainHandler.postDelayed(() -> {
+                    if (gatt != bluetoothGatt || readyDelivered
+                            || generation != deviceInfoReadGeneration) return;
+                    expectedDeviceInfoRead = 0;
+                    finishReady(bluetoothGatt);
+                }, DEVICE_INFO_READ_TIMEOUT_MILLIS);
+            }
+
+            private void handleDeviceInfoRead(BluetoothGatt bluetoothGatt,
+                                              BluetoothGattCharacteristic characteristic,
+                                              @Nullable byte[] value, int status) {
+                if (gatt != bluetoothGatt || readyDelivered) return;
+                UUID uuid = characteristic.getUuid();
+                if ((expectedDeviceInfoRead == 1 && !MODEL_NUMBER.equals(uuid))
+                        || (expectedDeviceInfoRead == 2 && !FIRMWARE_REVISION.equals(uuid))
+                        || expectedDeviceInfoRead == 0) return;
+                expectedDeviceInfoRead = 0;
+                deviceInfoReadGeneration++;
+                if (status == BluetoothGatt.GATT_SUCCESS) {
+                    String text = decodeGattText(value);
+                    if (MODEL_NUMBER.equals(uuid)) {
+                        deviceInfoModel = text;
+                    } else if (FIRMWARE_REVISION.equals(uuid)) {
+                        deviceInfoSoftware = text;
+                    }
+                }
+                if (MODEL_NUMBER.equals(uuid)) {
+                    readSoftwareThenReady(bluetoothGatt);
+                } else if (FIRMWARE_REVISION.equals(uuid)) {
+                    finishReady(bluetoothGatt);
                 }
             }
 
@@ -526,6 +626,7 @@ public final class BluetoothPrinterManager {
                 + (characteristic == null ? "无" : characteristic.getUuid())
                 + "\nBLE 通知特征：" + (notifyCharacteristic == null ? "无" : notifyCharacteristic.getUuid())
                 + "\nBLE 通知订阅：" + (notificationsSubscribed ? "已确认" : "未确认")
+                + "\n设备型号 / 软件版本：" + deviceInfoModel + " / " + deviceInfoSoftware
                 + "\n可写 GATT 特征：" + discoveredGattSummary
                 + "\n最近发送：" + lastTransferBytes + " 字节"
                 + "\n最近接收：" + lastReceivedBytes + " 字节"
@@ -544,6 +645,8 @@ public final class BluetoothPrinterManager {
         notificationsSubscribed = false;
         negotiatedMtu = 23;
         discoveredGattSummary = "未发现";
+        deviceInfoModel = "未读取";
+        deviceInfoSoftware = "未读取";
         updateState("未连接");
     }
 
@@ -601,6 +704,12 @@ public final class BluetoothPrinterManager {
         for (BluetoothGattService service : gatt.getServices()) {
             BluetoothGattCharacteristic preferred = findPreferredWrite(service, profile);
             if (preferred != null) return preferred;
+            if (profile != null && profile.protocol == ProtocolType.DOTHAN_PRIVATE
+                    && FFE0_SERVICE.equals(service.getUuid())) {
+                BluetoothGattCharacteristic ffe1 = service.getCharacteristic(FFE1_CHARACTERISTIC);
+                if (ffe1 != null && isWritable(ffe1)) return ffe1;
+                continue;
+            }
             for (BluetoothGattCharacteristic characteristic : service.getCharacteristics()) {
                 if (isWritable(characteristic)) {
                     if ((characteristic.getProperties() & BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE) != 0) {
@@ -635,8 +744,22 @@ public final class BluetoothPrinterManager {
                                                                            BluetoothGattCharacteristic write,
                                                                            @Nullable PrinterProfile profile) {
         if (profile != null && profile.protocol == ProtocolType.DOTHAN_PRIVATE) {
-            BluetoothGattCharacteristic exact = write.getService().getCharacteristic(P1_NOTIFY_UUID);
-            if (exact != null && isNotifiable(exact)) return exact;
+            UUID serviceUuid = write.getService().getUuid();
+            if (P1_MICROCHIP_SERVICE.equals(serviceUuid)) {
+                BluetoothGattCharacteristic exact = write.getService()
+                        .getCharacteristic(P1_NOTIFY_UUID);
+                return exact != null && isNotifiable(exact) ? exact : null;
+            }
+            if (DOTHAN_FF00_SERVICE.equals(serviceUuid)) {
+                BluetoothGattCharacteristic ff01 = write.getService()
+                        .getCharacteristic(DOTHAN_FF01_NOTIFY);
+                return ff01 != null && isNotifyOnly(ff01) ? ff01 : null;
+            }
+            if (FFE0_SERVICE.equals(serviceUuid)) {
+                BluetoothGattCharacteristic ffe1 = write.getService()
+                        .getCharacteristic(FFE1_CHARACTERISTIC);
+                return ffe1 != null && isNotifiable(ffe1) ? ffe1 : null;
+            }
         }
         BluetoothGattCharacteristic fallback = null;
         for (BluetoothGattService service : bluetoothGatt.getServices()) {
@@ -653,6 +776,12 @@ public final class BluetoothPrinterManager {
         int properties = characteristic.getProperties();
         return (properties & BluetoothGattCharacteristic.PROPERTY_NOTIFY) != 0
                 || (properties & BluetoothGattCharacteristic.PROPERTY_INDICATE) != 0;
+    }
+
+    private static boolean isNotifyOnly(BluetoothGattCharacteristic characteristic) {
+        int properties = characteristic.getProperties();
+        return (properties & BluetoothGattCharacteristic.PROPERTY_NOTIFY) != 0
+                && (properties & BluetoothGattCharacteristic.PROPERTY_INDICATE) == 0;
     }
 
     @SuppressWarnings("deprecation")
@@ -685,6 +814,13 @@ public final class BluetoothPrinterManager {
             }
         }
         return summary.length() == 0 ? "无" : summary.toString();
+    }
+
+    private static String decodeGattText(@Nullable byte[] value) {
+        if (value == null || value.length == 0) return "未返回";
+        String text = new String(value, StandardCharsets.UTF_8)
+                .replace("\u0000", "").trim();
+        return text.isEmpty() ? "未返回" : text;
     }
 
     @SuppressLint("MissingPermission")

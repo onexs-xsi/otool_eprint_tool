@@ -1,6 +1,7 @@
 package com.otool.eprint.device;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
@@ -35,10 +36,16 @@ public final class DeviceCatalogTest {
 
     @Test
     public void includesMicrochipTransparentUartForObservedBleHardware() {
-        PrinterProfile profile = DeviceCatalog.defaultProfile();
+        PrinterProfile profile = DeviceCatalog.find("p1_private_203");
         assertTrue(profile.preferredBleServices.contains(UUID.fromString(
                 "49535343-FE7D-4AE5-8FA9-9FAFD205E455")));
         assertTrue(profile.preferredBleWrites.contains(UUID.fromString(
                 "49535343-8841-43F4-A8D4-ECBE34729BB3")));
+        assertTrue(profile.preferredBleWrites.contains(UUID.fromString(
+                "0000FF02-0000-1000-8000-00805F9B34FB")));
+        assertFalse(profile.preferredBleWrites.contains(UUID.fromString(
+                "0000FF01-0000-1000-8000-00805F9B34FB")));
+        assertFalse(profile.useDefaultDothanAuth);
+        assertFalse(profile.applyDothanExtras);
     }
 }

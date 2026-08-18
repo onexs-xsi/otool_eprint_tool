@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">EPrint v1.3</string>
+    <string name="app_name">EPrint</string>
     <string name="offline_badge">本机离线</string>
     <string name="printer_disconnected">未连接打印机</string>
     <string name="scan_qr">扫描二维码/条形码</string>

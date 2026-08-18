@@ -19,19 +19,19 @@ public final class DeviceCatalog {
     };
     private static final String[] BLE_WRITES = {
             "0000FFE1-0000-1000-8000-00805F9B34FB",
-            "0000FF01-0000-1000-8000-00805F9B34FB",
             "0000FF02-0000-1000-8000-00805F9B34FB",
             "00002AF1-0000-1000-8000-00805F9B34FB",
             "49535343-8841-43F4-A8D4-ECBE34729BB3"
     };
     private static final String[] P1_BLE_SERVICES = {
             "49535343-FE7D-4AE5-8FA9-9FAFD205E455",
-            "0000FF00-0000-1000-8000-00805F9B34FB"
+            "0000FF00-0000-1000-8000-00805F9B34FB",
+            "0000FFE0-0000-1000-8000-00805F9B34FB"
     };
     private static final String[] P1_BLE_WRITES = {
             "49535343-8841-43F4-A8D4-ECBE34729BB3",
-            "0000FF01-0000-1000-8000-00805F9B34FB",
-            "0000FF02-0000-1000-8000-00805F9B34FB"
+            "0000FF02-0000-1000-8000-00805F9B34FB",
+            "0000FFE1-0000-1000-8000-00805F9B34FB"
     };
 
     private static final List<PrinterProfile> PROFILES = Collections.unmodifiableList(Arrays.asList(

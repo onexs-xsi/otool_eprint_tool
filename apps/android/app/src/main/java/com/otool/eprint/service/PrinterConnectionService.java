@@ -45,10 +45,16 @@ import com.otool.eprint.job.PrintJobState;
 import com.otool.eprint.print.BluetoothPrinterManager;
 import com.otool.eprint.print.UsbPrinterManager;
 import com.otool.eprint.protocol.DothanCommandStream;
+import com.otool.eprint.protocol.DothanAuthHandshake;
+import com.otool.eprint.protocol.DothanCommandCatalog;
 import com.otool.eprint.protocol.DothanDeviceSettingsEncoder;
+import com.otool.eprint.protocol.DothanDeviceState;
 import com.otool.eprint.protocol.DothanFrame;
 import com.otool.eprint.protocol.DothanFrameCodec;
 import com.otool.eprint.protocol.DothanFrameStreamParser;
+import com.otool.eprint.protocol.DothanManufacturerInfo;
+import com.otool.eprint.protocol.DothanReceiveParser;
+import com.otool.eprint.protocol.DothanStateMachine;
 import com.otool.eprint.protocol.ProtocolType;
 
 import java.util.ArrayDeque;
@@ -84,6 +90,8 @@ public final class PrinterConnectionService extends Service {
     private final CopyOnWriteArraySet<Listener> listeners = new CopyOnWriteArraySet<>();
     private final PrintJobQueue jobQueue = new PrintJobQueue();
     private final DothanFrameStreamParser dothanParser = new DothanFrameStreamParser();
+    private final DothanDeviceState dothanState = new DothanDeviceState();
+    private final DothanStateMachine dothanMachine = new DothanStateMachine();
     private final Deque<String> protocolTrace = new ArrayDeque<>();
 
     private BluetoothPrinterManager bluetooth;
@@ -118,7 +126,12 @@ public final class PrinterConnectionService extends Service {
     private int p1ObservedAutoFeed = -1;
     private int p1ObservedBeep = -1;
     private int p1ObservedAutoPowerOffMinutes = -1;
+    private int p1ObservedMotorMode = -1;
+    private int p1ObservedLanguage = -1;
     private int p1ObservedBufferBytes = -1;
+    private DothanManufacturerInfo lastManufacturerInfo;
+    private byte[] dothanExpectedLoginToken;
+    private String dothanAuthState = "未启用";
     private PrinterProfile pendingP1Settings;
     private BluetoothPrinterManager.Callback pendingP1SettingsCallback;
     private boolean p1SettingsInFlight;
@@ -428,16 +441,18 @@ public final class PrinterConnectionService extends Service {
         if (controller == null || profile == null || connectedDevice() == null) return;
         if (profile.protocol == ProtocolType.DOTHAN_PRIVATE) {
             byte[] query = DothanFrameCodec.join(
-                    DothanFrameCodec.encode(0x84, (byte) 1),
-                    DothanFrameCodec.encode(0x71),
-                    DothanFrameCodec.encode(0x72),
-                    DothanFrameCodec.encode(0x42),
-                    DothanFrameCodec.encode(0x43),
-                    DothanFrameCodec.encode(0x44),
-                    DothanFrameCodec.encode(0x45),
-                    DothanFrameCodec.encode(0x48),
-                    DothanFrameCodec.encode(0x4D),
-                    DothanFrameCodec.encode(0x77, (byte) 0, (byte) 0));
+                    DothanCommandCatalog.sessionParameters(),
+                    DothanCommandCatalog.query(DothanCommandCatalog.PRINTER_DPI),
+                    DothanCommandCatalog.query(DothanCommandCatalog.PRINTER_WIDTH),
+                    DothanCommandCatalog.query(DothanCommandCatalog.GAP_TYPE),
+                    DothanCommandCatalog.query(DothanCommandCatalog.PRINT_DENSITY),
+                    DothanCommandCatalog.query(DothanCommandCatalog.PRINT_SPEED),
+                    DothanCommandCatalog.query(DothanCommandCatalog.GAP_LENGTH),
+                    DothanCommandCatalog.query(DothanCommandCatalog.MOTOR_MODE),
+                    DothanCommandCatalog.query(DothanCommandCatalog.AUTO_POWER_OFF),
+                    DothanCommandCatalog.query(DothanCommandCatalog.LANGUAGE),
+                    DothanCommandCatalog.query(DothanCommandCatalog.FLAGS),
+                    DothanCommandCatalog.bufferQuery());
             traceProtocol("TX PROBE " + query.length + " bytes");
             sendRaw(query, profile, new BluetoothPrinterManager.Callback() {
                 @Override public void onSuccess(String message) {
@@ -493,6 +508,12 @@ public final class PrinterConnectionService extends Service {
                 && activeProfile.protocol == ProtocolType.DOTHAN_PRIVATE
                 ? (dothanProtocolReady ? "已确认，可打印" : "未确认，禁止打印") : "不适用")
                 + "\nP1 设备实测配置：" + p1ObservedConfiguration()
+                + "\nP1 厂商/耗材信息："
+                + (lastManufacturerInfo == null ? "尚未返回"
+                : lastManufacturerInfo.summary().replace("\n", "\n  "))
+                + "\nP1 授权状态：" + dothanAuthState
+                + "\nP1 设备状态模型：" + dothanStateSummary()
+                + "\nP1 状态机：" + dothanMachine.summary()
                 + "\nP1 收包解析：缓存 " + dothanParser.bufferedBytes()
                 + " 字节 / 拒绝 " + dothanParser.rejectedFrames() + " 帧"
                 + "\n自动重连：" + (manualDisconnect ? "关闭" : "开启")
@@ -614,31 +635,39 @@ public final class PrinterConnectionService extends Service {
 
     private void beginDothanNegotiation(String transportMessage) {
         resetDothanProtocol();
+        dothanMachine.negotiating();
         int generation = ++dothanProtocolGeneration;
         setConnectionState(ConnectionPhase.TRANSPORT_CONNECTED,
-                transportMessage + " · BLE 通道已建立");
+                transportMessage + " · 传输通道已建立");
         setConnectionState(ConnectionPhase.PROTOCOL_NEGOTIATING,
                 "正在确认 P1 私有协议与命令缓冲回执");
         byte[] query = DothanFrameCodec.join(
-                DothanFrameCodec.encode(0x84, (byte) 1),
-                DothanFrameCodec.encode(0x71),
-                DothanFrameCodec.encode(0x72),
-                DothanFrameCodec.encode(0x42),
-                DothanFrameCodec.encode(0x43),
-                DothanFrameCodec.encode(0x44),
-                DothanFrameCodec.encode(0x45),
-                DothanFrameCodec.encode(0x48),
-                DothanFrameCodec.encode(0x4D),
-                DothanFrameCodec.encode(0x77, (byte) 0, (byte) 0));
+                DothanCommandCatalog.sessionParameters(),
+                DothanCommandCatalog.query(DothanCommandCatalog.PRINTER_DPI),
+                DothanCommandCatalog.query(DothanCommandCatalog.PRINTER_WIDTH),
+                DothanCommandCatalog.query(DothanCommandCatalog.GAP_TYPE),
+                DothanCommandCatalog.query(DothanCommandCatalog.PRINT_DENSITY),
+                DothanCommandCatalog.query(DothanCommandCatalog.PRINT_SPEED),
+                DothanCommandCatalog.query(DothanCommandCatalog.GAP_LENGTH),
+                DothanCommandCatalog.query(DothanCommandCatalog.MOTOR_MODE),
+                DothanCommandCatalog.query(DothanCommandCatalog.AUTO_POWER_OFF),
+                DothanCommandCatalog.query(DothanCommandCatalog.LANGUAGE),
+                DothanCommandCatalog.query(DothanCommandCatalog.FLAGS),
+                DothanCommandCatalog.bufferQuery());
         traceProtocol("NEGOTIATE TX " + query.length + " bytes");
         sendRaw(query, activeProfile, new BluetoothPrinterManager.Callback() {
             @Override public void onSuccess(String message) {
                 if (generation != dothanProtocolGeneration) return;
                 traceProtocol("NEGOTIATE transport accepted");
+                if (dothanProtocolReady) return;
+                if (p1ObservedBufferBytes >= 0) {
+                    scheduleDothanSpecificationTimeout(generation);
+                    return;
+                }
                 scheduleDothanTimeout(4_500, () -> {
                     if (generation != dothanProtocolGeneration || dothanProtocolReady) return;
                     setConnectionState(ConnectionPhase.TRANSPORT_CONNECTED,
-                            "P1 蓝牙已连接，但未收到 0x77 协议回执；打印保持禁用");
+                            "P1 传输通道已连接，但未收到 0x77 协议回执；打印保持禁用");
                     traceProtocol("NEGOTIATE timeout: no 0x77");
                 });
             }
@@ -652,27 +681,35 @@ public final class PrinterConnectionService extends Service {
         });
     }
 
-    private void markDothanReady(int bufferBytes) {
+    private boolean markDothanReady(int bufferBytes) {
         p1ObservedBufferBytes = bufferBytes;
-        if ((p1ObservedDpi >= 0 && p1ObservedDpi != 203)
-                || (p1ObservedWidthDots >= 0 && p1ObservedWidthDots != 384)) {
+        if (p1ObservedDpi < 0 || p1ObservedWidthDots < 0) {
+            dothanProtocolReady = false;
+            int generation = dothanProtocolGeneration;
+            scheduleDothanSpecificationTimeout(generation);
+            traceProtocol("READY waiting for DPI/width " + p1ObservedConfiguration());
+            return false;
+        }
+        if (p1ObservedDpi != 203 || p1ObservedWidthDots != 384) {
             dothanProtocolReady = false;
             cancelDothanTimeout();
             String message = "P1 协议已响应，但实测规格不是已验证的 203 DPI / 384 点；打印保持禁用 · "
                     + p1ObservedConfiguration();
             setConnectionState(ConnectionPhase.TRANSPORT_CONNECTED, message);
             traceProtocol("READY REJECTED profile mismatch " + p1ObservedConfiguration());
-            return;
+            return false;
         }
         if (!dothanProtocolReady) {
             dothanProtocolReady = true;
             cancelDothanTimeout();
+            dothanMachine.ready();
             setConnectionState(ConnectionPhase.PRINTER_READY,
                     "P1 私有协议已确认 · " + p1ObservedConfiguration());
             traceProtocol("READY buffer=" + bufferBytes);
             if (pendingP1Settings != null) applyPendingP1Settings();
             else processNextJob();
         }
+        return true;
     }
 
     private void applyPendingP1Settings() {
@@ -683,17 +720,23 @@ public final class PrinterConnectionService extends Service {
         p1SettingsInFlight = true;
         int generation = dothanProtocolGeneration;
         byte[] settings = DothanDeviceSettingsEncoder.encode(profile);
+        dothanMachine.settingsWrite();
         setConnectionState(ConnectionPhase.PROTOCOL_NEGOTIATING,
-                "正在写入 P1 浓度、速度、介质、间隙、出纸、提示音与自动关机配置");
+                "正在写入 P1 已验证基础配置"
+                        + (profile.applyDothanExtras ? "及实验性电机/语言参数" : ""));
         traceProtocol("SETTINGS TX " + settings.length + " bytes");
         sendRaw(settings, profile, new BluetoothPrinterManager.Callback() {
             @Override public void onSuccess(String message) {
                 if (generation != dothanProtocolGeneration || pendingP1Settings != profile) return;
                 traceProtocol("SETTINGS transport accepted; verifying by readback");
+                dothanMachine.settingsVerify();
                 mainHandler.postDelayed(() -> {
                     if (generation != dothanProtocolGeneration || pendingP1Settings != profile) return;
+                    resetP1SettingsReadback();
                     probeStatus();
-                    mainHandler.postDelayed(() -> verifyP1Settings(profile, callback, generation), 900);
+                    long deadline = SystemClock.elapsedRealtime() + 3_500;
+                    mainHandler.postDelayed(() -> verifyP1Settings(
+                            profile, callback, generation, deadline), 250);
                 }, 120);
             }
 
@@ -702,6 +745,7 @@ public final class PrinterConnectionService extends Service {
                 p1SettingsInFlight = false;
                 pendingP1Settings = null;
                 pendingP1SettingsCallback = null;
+                dothanMachine.failed();
                 String detail = "P1 配置写入失败：" + message;
                 setConnectionState(ConnectionPhase.PRINTER_READY,
                         detail + "；协议仍可用，打印任务未自动执行");
@@ -713,31 +757,64 @@ public final class PrinterConnectionService extends Service {
 
     private void verifyP1Settings(PrinterProfile profile,
                                   BluetoothPrinterManager.Callback callback,
-                                  int generation) {
+                                  int generation, long deadline) {
         if (generation != dothanProtocolGeneration || pendingP1Settings != profile) return;
+        boolean complete = p1ObservedDensity >= 0
+                && p1ObservedSpeed >= 0
+                && p1ObservedGapType >= 0
+                && p1ObservedGapHundredthsMm >= 0
+                && p1ObservedAutoFeed >= 0
+                && p1ObservedBeep >= 0
+                && p1ObservedAutoPowerOffMinutes >= 0
+                && (!profile.applyDothanExtras
+                || (p1ObservedMotorMode >= 0 && p1ObservedLanguage >= 0));
+        if (!complete && SystemClock.elapsedRealtime() < deadline) {
+            mainHandler.postDelayed(() -> verifyP1Settings(
+                    profile, callback, generation, deadline), 250);
+            return;
+        }
         boolean matches = p1ObservedDensity == profile.printDensity
                 && p1ObservedSpeed == profile.printSpeed
                 && p1ObservedGapType == dothanGapType(profile)
                 && p1ObservedGapHundredthsMm == profile.gapLengthTenthsMm * 10
                 && p1ObservedAutoFeed == (profile.autoFeed ? 1 : 0)
                 && p1ObservedBeep == (profile.beep ? 1 : 0)
-                && p1ObservedAutoPowerOffMinutes == profile.autoPowerOffMinutes;
+                && p1ObservedAutoPowerOffMinutes == profile.autoPowerOffMinutes
+                && (!profile.applyDothanExtras
+                || (p1ObservedMotorMode == profile.motorMode
+                && p1ObservedLanguage == profile.language));
         p1SettingsInFlight = false;
         pendingP1Settings = null;
         pendingP1SettingsCallback = null;
-        if (matches) {
+        if (complete && matches) {
+            dothanMachine.ready();
             String detail = "P1 配置已写入并回读确认 · " + p1ObservedConfiguration();
             setConnectionState(ConnectionPhase.PRINTER_READY, detail);
             traceProtocol("SETTINGS VERIFIED " + p1ObservedConfiguration());
             callback.onSuccess(detail);
             processNextJob();
         } else {
-            String detail = "P1 配置回读与期望不一致 · 实测：" + p1ObservedConfiguration();
+            dothanMachine.failed();
+            String detail = complete
+                    ? "P1 配置回读与期望不一致 · 实测：" + p1ObservedConfiguration()
+                    : "P1 配置回读不完整，未确认写入成功 · 实测：" + p1ObservedConfiguration();
             setConnectionState(ConnectionPhase.PRINTER_READY,
                     detail + "；请在诊断中核对，未自动打印");
             traceProtocol("SETTINGS VERIFY MISMATCH " + p1ObservedConfiguration());
             callback.onError(detail);
         }
+    }
+
+    private void resetP1SettingsReadback() {
+        p1ObservedDensity = -1;
+        p1ObservedSpeed = -1;
+        p1ObservedGapType = -1;
+        p1ObservedGapHundredthsMm = -1;
+        p1ObservedAutoFeed = -1;
+        p1ObservedBeep = -1;
+        p1ObservedAutoPowerOffMinutes = -1;
+        p1ObservedMotorMode = -1;
+        p1ObservedLanguage = -1;
     }
 
     private static int dothanGapType(PrinterProfile profile) {
@@ -751,14 +828,41 @@ public final class PrinterConnectionService extends Service {
     }
 
     private void handleDothanFrame(DothanFrame frame) {
+        if (frame.isText()) {
+            traceProtocol("TEXT " + frame.textCommand);
+            return;
+        }
         traceProtocol(String.format(Locale.US, "FRAME 0x%02X payload=%d %s",
                 frame.type, frame.payload.length, hexPrefix(frame.payload)));
         observeDothanConfiguration(frame);
+        DothanReceiveParser.parse(frame, dothanState);
+        if (frame.type == DothanCommandCatalog.STATUS_REPORT
+                && frame.payload.length > 0 && (frame.payload[0] & 0xFF) == 4) {
+            if (dothanState.manufacturerInfo != null) {
+                lastManufacturerInfo = dothanState.manufacturerInfo;
+                traceProtocol("MANUFACTURER "
+                        + lastManufacturerInfo.summary().replace('\n', ' '));
+            } else {
+                traceProtocol("MANUFACTURER parse rejected " + hexPrefix(frame.payload));
+            }
+            return;
+        }
+        if (frame.type == 0x9F) {
+            handleDothanAuthReply(frame.payload);
+            return;
+        }
         if (frame.type == 0x77) {
             int units = DothanFrameCodec.readVariableShort(frame.payload, 0);
             int bufferBytes = units < 0 ? 0 : units == 1 ? 1000 : units * 500;
-            markDothanReady(bufferBytes);
+            boolean protocolAccepted = markDothanReady(bufferBytes);
             DothanPrintTask task = dothanPrintTask;
+            if (!protocolAccepted) {
+                if (task != null) {
+                    failDothanJob(task,
+                            "P1 在任务期间未通过 203 DPI / 384 点规格门控；已停止发送");
+                }
+                return;
+            }
             if (task != null) {
                 task.availableBytes = Math.max(task.availableBytes, bufferBytes);
                 sendNextDothanChunk(task);
@@ -770,6 +874,28 @@ public final class PrinterConnectionService extends Service {
         }
     }
 
+    private void handleDothanAuthReply(byte[] payload) {
+        DothanPrintTask task = dothanPrintTask;
+        boolean matches = DothanAuthHandshake.loginMatches(payload, dothanExpectedLoginToken);
+        traceProtocol("AUTH REPLY " + hexPrefix(payload) + (matches ? " MATCH" : " MISMATCH"));
+        if (matches) {
+            dothanAuthState = "已通过 0x9F 授权回执";
+        } else {
+            dothanAuthState = "0x9F 授权回执不匹配";
+        }
+        if (task != null && task.authRequired && !task.authVerified) {
+            if (matches) {
+                task.authVerified = true;
+                task.job.message = "P1 授权已确认，等待/使用 0x77 缓冲许可";
+                notifyJob(task.job);
+                dothanMachine.sending();
+                sendNextDothanChunk(task);
+            } else {
+                failDothanJob(task, "P1 授权回执与 loginToken 不匹配；未发送位图");
+            }
+        }
+    }
+
     private void startDothanPrint(PrintJob job) {
         DothanPrintTask task = new DothanPrintTask(job);
         dothanPrintTask = task;
@@ -777,13 +903,45 @@ public final class PrinterConnectionService extends Service {
             failDothanJob(task, "P1 协议尚未就绪，未发送任何打印数据");
             return;
         }
+        byte[] helloToken;
+        byte[] loginToken;
+        boolean authRequired;
+        boolean hasUserToken = !job.profile.helloTokenHex.trim().isEmpty()
+                || !job.profile.loginTokenHex.trim().isEmpty();
+        if (hasUserToken) {
+            helloToken = parseHexToken(job.profile.helloTokenHex);
+            loginToken = parseHexToken(job.profile.loginTokenHex);
+            authRequired = helloToken != null && helloToken.length >= 4
+                    && loginToken != null && loginToken.length == 4;
+            if (!authRequired) {
+                failDothanJob(task, "P1 授权令牌格式无效：helloToken 至少 4 字节，loginToken 必须 4 字节；未发送任何数据");
+                return;
+            }
+        } else if (job.profile.useDefaultDothanAuth) {
+            int defaultIndex = DothanAuthHandshake.defaultPairIndex();
+            helloToken = DothanAuthHandshake.defaultHelloToken(defaultIndex);
+            loginToken = DothanAuthHandshake.defaultLoginToken(defaultIndex);
+            authRequired = true;
+            traceProtocol("AUTH using offline default pair " + defaultIndex);
+        } else {
+            helloToken = null;
+            loginToken = null;
+            authRequired = false;
+        }
+        task.authRequired = authRequired;
+        task.authVerified = !authRequired;
+        dothanExpectedLoginToken = authRequired ? loginToken : null;
+        dothanAuthState = authRequired ? "等待打印机返回 0x9F 授权回执" : "未启用";
+        if (authRequired) dothanMachine.authWait();
+        else dothanMachine.sending();
         setConnectionState(ConnectionPhase.SENDING, "正在初始化 P1 打印会话");
         byte[] prelude = DothanFrameCodec.join(
-                DothanFrameCodec.encode(0x70),
-                DothanFrameCodec.encode(0x80, (byte) 0x49),
-                DothanFrameCodec.encode(0x84, (byte) 1),
-                DothanFrameCodec.encode(0x80, (byte) 0),
-                DothanFrameCodec.encode(0x77, (byte) 0, (byte) 0));
+                DothanCommandCatalog.printReceiptQuery(),
+                DothanCommandCatalog.sessionStart(true),
+                authRequired ? DothanAuthHandshake.helloToken(helloToken) : new byte[0],
+                DothanCommandCatalog.sessionParameters(),
+                DothanCommandCatalog.sessionClose(),
+                DothanCommandCatalog.bufferQuery());
         traceProtocol("PRINT " + shortJob(job) + " PRELUDE TX " + prelude.length);
         sendRaw(prelude, job.profile, new BluetoothPrinterManager.Callback() {
             @Override public void onSuccess(String message) {
@@ -792,7 +950,9 @@ public final class PrinterConnectionService extends Service {
                 job.message = "P1 会话已建立，等待 0x77 缓冲许可";
                 notifyJob(job);
                 scheduleDothanTimeout(6_000,
-                        () -> failDothanJob(task, "等待 P1 0x77 缓冲回执超时；未盲目发送位图"));
+                        () -> failDothanJob(task, authRequired
+                                ? "等待 P1 0x9F 授权回执或 0x77 缓冲回执超时；未盲目发送位图"
+                                : "等待 P1 0x77 缓冲回执超时；未盲目发送位图"));
                 sendNextDothanChunk(task);
             }
 
@@ -804,7 +964,7 @@ public final class PrinterConnectionService extends Service {
 
     private void sendNextDothanChunk(DothanPrintTask task) {
         if (dothanPrintTask != task || !task.controlAccepted || !task.preflightReady
-                || task.transmitting
+                || task.transmitting || (task.authRequired && !task.authVerified)
                 || task.awaitingReceipt || task.availableBytes <= 0) return;
         if (task.offset >= task.job.data.length) {
             finishDothanData(task);
@@ -858,7 +1018,7 @@ public final class PrinterConnectionService extends Service {
 
     private void requestDothanBuffer(DothanPrintTask task) {
         if (dothanPrintTask != task) return;
-        byte[] query = DothanFrameCodec.encode(0x77, (byte) 0, (byte) 0);
+        byte[] query = DothanCommandCatalog.bufferQuery();
         traceProtocol("PRINT BUFFER QUERY");
         sendRaw(query, task.job.profile, new BluetoothPrinterManager.Callback() {
             @Override public void onSuccess(String message) {
@@ -881,9 +1041,10 @@ public final class PrinterConnectionService extends Service {
         task.awaitingReceipt = true;
         task.receiptDeadlineAt = SystemClock.elapsedRealtime() + 30_000;
         task.transmitting = true;
+        dothanMachine.waitingReceipt();
         byte[] finish = DothanFrameCodec.join(
-                DothanFrameCodec.encode(0x70),
-                DothanFrameCodec.encode(0x77, (byte) 0, (byte) 0));
+                DothanCommandCatalog.printReceiptQuery(),
+                DothanCommandCatalog.bufferQuery());
         traceProtocol("PRINT DATA ENDED; request 0x70 receipt");
         sendRaw(finish, task.job.profile, new BluetoothPrinterManager.Callback() {
             @Override public void onSuccess(String message) {
@@ -922,7 +1083,7 @@ public final class PrinterConnectionService extends Service {
     private void requestDothanReceipt(DothanPrintTask task) {
         if (dothanPrintTask != task || !task.awaitingReceipt) return;
         traceProtocol("PRINT RECEIPT POLL 0x70");
-        sendRaw(DothanFrameCodec.encode(0x70), task.job.profile,
+        sendRaw(DothanCommandCatalog.printReceiptQuery(), task.job.profile,
                 new BluetoothPrinterManager.Callback() {
                     @Override public void onSuccess(String message) {
                         if (dothanPrintTask != task || !task.awaitingReceipt) return;
@@ -989,6 +1150,7 @@ public final class PrinterConnectionService extends Service {
         dothanPrintTask = null;
         currentJob = null;
         releaseWakeLock();
+        dothanMachine.ready();
         setConnectionState(ConnectionPhase.PRINTER_READY, "P1 打印完成并已确认");
         processNextJob();
     }
@@ -1006,6 +1168,7 @@ public final class PrinterConnectionService extends Service {
         dothanPrintTask = null;
         if (task == null || currentJob == task.job) currentJob = null;
         releaseWakeLock();
+        dothanMachine.failed();
         setConnectionState(ConnectionPhase.PRINT_FAILED, message);
     }
 
@@ -1016,6 +1179,16 @@ public final class PrinterConnectionService extends Service {
             action.run();
         };
         mainHandler.postDelayed(dothanTimeoutRunnable, delayMillis);
+    }
+
+    private void scheduleDothanSpecificationTimeout(int generation) {
+        scheduleDothanTimeout(2_000, () -> {
+            if (generation != dothanProtocolGeneration || dothanProtocolReady) return;
+            setConnectionState(ConnectionPhase.TRANSPORT_CONNECTED,
+                    "P1 已返回缓冲许可，但 DPI/宽度回读不完整；打印保持禁用 · "
+                            + p1ObservedConfiguration());
+            traceProtocol("READY timeout: missing DPI/width " + p1ObservedConfiguration());
+        });
     }
 
     private void cancelDothanTimeout() {
@@ -1030,6 +1203,8 @@ public final class PrinterConnectionService extends Service {
         p1SettingsInFlight = false;
         dothanPrintTask = null;
         dothanParser.reset();
+        dothanState.reset();
+        dothanMachine.reset();
         p1ObservedDpi = -1;
         p1ObservedWidthDots = -1;
         p1ObservedDensity = -1;
@@ -1039,7 +1214,12 @@ public final class PrinterConnectionService extends Service {
         p1ObservedAutoFeed = -1;
         p1ObservedBeep = -1;
         p1ObservedAutoPowerOffMinutes = -1;
+        p1ObservedMotorMode = -1;
+        p1ObservedLanguage = -1;
         p1ObservedBufferBytes = -1;
+        lastManufacturerInfo = null;
+        dothanExpectedLoginToken = null;
+        dothanAuthState = "未启用";
     }
 
     private void observeDothanConfiguration(DothanFrame frame) {
@@ -1064,10 +1244,16 @@ public final class PrinterConnectionService extends Service {
                 p1ObservedSpeed = (payload[0] & 0xFF) + 1;
                 break;
             case 0x45:
-                p1ObservedGapHundredthsMm = DothanFrameCodec.readVariableShort(payload, 0);
+                p1ObservedGapHundredthsMm = DothanFrameCodec.readVariableInteger(payload, 0);
                 break;
             case 0x48:
                 p1ObservedAutoPowerOffMinutes = DothanFrameCodec.readVariableShort(payload, 0);
+                break;
+            case 0x47:
+                p1ObservedMotorMode = payload[0] & 0xFF;
+                break;
+            case 0x49:
+                p1ObservedLanguage = payload[0] & 0xFF;
                 break;
             case 0x4D:
                 if (payload.length >= 3 && (payload[2] & 0x02) == 0) {
@@ -1077,6 +1263,9 @@ public final class PrinterConnectionService extends Service {
                 break;
             default:
                 break;
+        }
+        if (p1ObservedBufferBytes >= 0 && (frame.type == 0x71 || frame.type == 0x72)) {
+            markDothanReady(p1ObservedBufferBytes);
         }
     }
 
@@ -1104,10 +1293,53 @@ public final class PrinterConnectionService extends Service {
         if (p1ObservedAutoPowerOffMinutes >= 0) {
             appendObserved(value, "自动关机 " + p1ObservedAutoPowerOffMinutes + " 分钟");
         }
+        if (p1ObservedMotorMode >= 0) {
+            appendObserved(value, "电机 " + p1ObservedMotorMode);
+        }
+        if (p1ObservedLanguage >= 0) {
+            appendObserved(value, "语言 " + p1ObservedLanguage);
+        }
         if (p1ObservedBufferBytes >= 0) {
             appendObserved(value, "缓冲 " + p1ObservedBufferBytes + " 字节");
         }
         return value.toString();
+    }
+
+    private String dothanStateSummary() {
+        StringBuilder value = new StringBuilder();
+        if (dothanState.deviceName != null && !dothanState.deviceName.isEmpty()) {
+            value.append("名称 ").append(dothanState.deviceName);
+        }
+        if (dothanState.addressType >= 0) {
+            appendObserved(value, "地址类型 " + dothanState.addressTypeName());
+            if (!dothanState.macAddress.isEmpty()) {
+                appendObserved(value, "MAC " + dothanState.macAddress);
+            }
+        }
+        if (dothanState.motorMode >= 0) appendObserved(value, "电机 " + dothanState.motorMode);
+        if (dothanState.language >= 0) appendObserved(value, "语言 " + dothanState.language);
+        if (dothanState.singleStatus >= 0) appendObserved(value, "状态 0x"
+                + String.format(Locale.US, "%02X", dothanState.singleStatus));
+        if (dothanState.batteryCount >= 0) appendObserved(value, "电池数 " + dothanState.batteryCount);
+        if (dothanState.isConnectedAdapter) appendObserved(value, "适配器已连接");
+        if (dothanState.chargeStatus >= 0) appendObserved(value, "充电状态 " + dothanState.chargeStatus);
+        if (dothanState.printerStatus >= 0) {
+            appendObserved(value, "打印机状态 " + dothanState.printerStatus
+                    + "（" + receiptStatus(dothanState.printerStatus) + "）");
+        }
+        if (dothanState.paramByte9 >= 0) appendObserved(value, "参数字节9 " + dothanState.paramByte9);
+        if (dothanState.manufacturerFieldD >= 0) {
+            appendObserved(value, "厂商字段D " + dothanState.manufacturerFieldD
+                    + " / E " + dothanState.manufacturerFieldE);
+        }
+        if (dothanState.counters.length > 0) {
+            appendObserved(value, "计数 " + java.util.Arrays.toString(dothanState.counters));
+        }
+        if (dothanState.flagJ || dothanState.flagI || dothanState.flagH) {
+            appendObserved(value, "标志 J=" + dothanState.flagJ
+                    + " I=" + dothanState.flagI + " H=" + dothanState.flagH);
+        }
+        return value.length() == 0 ? "尚未返回扩展字段" : value.toString();
     }
 
     private static void appendObserved(StringBuilder target, String item) {
@@ -1163,6 +1395,21 @@ public final class PrinterConnectionService extends Service {
         return job.id.substring(0, Math.min(8, job.id.length()));
     }
 
+    private static byte[] parseHexToken(String value) {
+        if (value == null) return null;
+        String cleaned = value.trim().replaceAll("[\\s:,]", "");
+        if (cleaned.isEmpty()) return null;
+        if ((cleaned.length() & 1) != 0) return null;
+        byte[] result = new byte[cleaned.length() / 2];
+        for (int index = 0; index < result.length; index++) {
+            int high = Character.digit(cleaned.charAt(index * 2), 16);
+            int low = Character.digit(cleaned.charAt(index * 2 + 1), 16);
+            if (high < 0 || low < 0) return null;
+            result[index] = (byte) ((high << 4) | low);
+        }
+        return result;
+    }
+
     private static String receiptStatus(int status) {
         switch (status) {
             case 0: return "完成";
@@ -1181,12 +1428,12 @@ public final class PrinterConnectionService extends Service {
             case 38: return "碳带不匹配";
             case 39: return "打印头过冷";
             case 40: return "碳带用尽";
-            case 41: return "碳带用尽";
+            case 41: return "碳带用尽2";
             case 42: return "未检测到标签";
             case 43: return "标签不匹配";
             case 44: return "标签用尽";
-            case 45: return "缺碳带";
-            case 46: return "碳带不匹配";
+            case 45: return "缺碳带2";
+            case 46: return "碳带不匹配2";
             case 50: return "标签仓打开";
             default: return status <= 11 ? "设备完成状态" : "其他设备错误";
         }
@@ -1202,6 +1449,8 @@ public final class PrinterConnectionService extends Service {
         boolean transmitting;
         boolean awaitingReceipt;
         boolean physicalAttemptStarted;
+        boolean authRequired;
+        boolean authVerified;
         long receiptDeadlineAt;
 
         DothanPrintTask(PrintJob job) {

@@ -51,4 +51,24 @@ public final class DothanProtocolEncoderTest {
         assertArrayEquals(new byte[]{(byte) 0xC1, 0x2C},
                 DothanProtocolEncoder.distanceHundredthsMm(30));
     }
+
+    @Test
+    public void encodesMultipleCopiesWithValidCommandStream() {
+        MonochromeRaster raster = new MonochromeRaster(16, 1,
+                new byte[]{(byte) 0x80, 0});
+        DothanJobOptions options = new DothanJobOptions(3, 0, 0, 0, 0,
+                DothanJobOptions.ALIGN_LEFT, 0, false, false);
+        byte[] stream = new DothanProtocolEncoder().encode(raster, 2f, 1f,
+                DeviceCatalog.find("p1_private_203"), options);
+        int offset = 0;
+        int commands = 0;
+        while (offset < stream.length) {
+            int length = DothanCommandStream.nextCommandLength(stream, offset);
+            assertTrue(length > 0);
+            offset += length;
+            commands++;
+        }
+        assertEquals(stream.length, offset);
+        assertTrue(commands >= 27);
+    }
 }

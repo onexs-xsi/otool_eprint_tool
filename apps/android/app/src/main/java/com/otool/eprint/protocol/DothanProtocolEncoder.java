@@ -7,36 +7,52 @@ import java.io.ByteArrayOutputStream;
 import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicInteger;
 
-/** P1 bitmap command stream. Uses uncompressed super-bitmap rows for first-printer safety. */
+/** Dothan bitmap command stream. Keeps verified raw rows by default and supports RLE modes. */
 public final class DothanProtocolEncoder implements ProtocolEncoder {
     private static final AtomicInteger PAGE_KEY = new AtomicInteger(1);
 
     @Override
     public byte[] encode(MonochromeRaster raster, float widthMm, float heightMm,
                          PrinterProfile profile) {
+        return encode(raster, widthMm, heightMm, profile, DothanJobOptions.defaults());
+    }
+
+    public byte[] encode(MonochromeRaster raster, float widthMm, float heightMm,
+                         PrinterProfile profile, DothanJobOptions options) {
+        DothanJobOptions job = options == null ? DothanJobOptions.defaults() : options;
+        MonochromeRaster transformed = DothanRasterTransform.apply(raster, job);
+        ByteArrayOutputStream all = new ByteArrayOutputStream(
+                transformed.widthBytes * transformed.heightDots + 128);
+        for (int copy = 0; copy < job.copies; copy++) {
+            byte[] page = encodePage(transformed, widthMm, heightMm, profile);
+            all.write(page, 0, page.length);
+        }
+        return all.toByteArray();
+    }
+
+    private byte[] encodePage(MonochromeRaster raster, float widthMm, float heightMm,
+                              PrinterProfile profile) {
         if (raster.widthDots > profile.printableWidthDots) {
             throw new IllegalArgumentException("P1 raster exceeds 384-dot print head");
         }
         ByteArrayOutputStream output = new ByteArrayOutputStream(
                 raster.widthBytes * raster.heightDots + raster.heightDots * 6 + 128);
         int pageKey = PAGE_KEY.getAndUpdate(value -> value >= 0xFFFF ? 1 : value + 1);
-        append(output, DothanFrameCodec.encode(0x20,
-                (byte) (pageKey >>> 8), (byte) pageKey, (byte) 0, (byte) 0,
-                (byte) 0, (byte) 0, (byte) 0, (byte) 0));
+        append(output, DothanCommandCatalog.pageHeader(pageKey, false));
         // P1's official UI presents density/speed as 1-based levels, while the
         // device replies and bitmap protocol carry zero-based values.
-        append(output, DothanFrameCodec.encode(0x43, (byte) wireLevel(profile.printDensity)));
-        append(output, DothanFrameCodec.encode(0x44, (byte) wireLevel(profile.printSpeed)));
-        int gapType = gapType(profile.paperType);
-        append(output, DothanFrameCodec.encode(0x42, (byte) gapType));
-        if (gapType != 0) append(output, DothanFrameCodec.encode(0x45,
-                distanceHundredthsMm(profile.gapLengthTenthsMm)));
-        append(output, DothanFrameCodec.encode(0x27,
-                DothanFrameCodec.variableShort(raster.widthBytes)));
-        append(output, DothanFrameCodec.encode(0x26,
-                DothanFrameCodec.variableShort(raster.heightDots)));
+        append(output, DothanCommandCatalog.density(profile.printDensity));
+        append(output, DothanCommandCatalog.speed(profile.printSpeed));
+        int wireGapType = gapType(profile.paperType);
+        append(output, DothanCommandCatalog.gapType(profile.paperType));
+        if (wireGapType != 0) {
+            append(output, DothanCommandCatalog.gapLength(profile.gapLengthTenthsMm));
+        }
+        append(output, DothanCommandCatalog.rowWidthBytes(raster.widthBytes));
+        append(output, DothanCommandCatalog.pageHeight(raster.heightDots));
 
         byte[] data = raster.copyData();
+        DothanCompressionMode compression = profile.compression;
         int blankRows = 0;
         int maxBlackDots = 0;
         int energyWindowRows = Math.max(1,
@@ -45,6 +61,7 @@ public final class DothanProtocolEncoder implements ProtocolEncoder {
         int recentIndex = 0;
         int recentTotal = 0;
         int maxAverageBlackDots = 0;
+        byte[] previousRow = null;
         for (int row = 0; row < raster.heightDots; row++) {
             int start = row * raster.widthBytes;
             int end = start + raster.widthBytes;
@@ -59,46 +76,34 @@ public final class DothanProtocolEncoder implements ProtocolEncoder {
             recentIndex = (recentIndex + 1) % recentBlackDots.length;
             maxAverageBlackDots = Math.max(maxAverageBlackDots,
                     recentTotal / recentBlackDots.length);
-            int last = end - 1;
-            while (last >= start && data[last] == 0) last--;
-            if (last < start) {
+            byte[] currentRow = Arrays.copyOfRange(data, start, end);
+            if (black == 0) {
                 blankRows++;
+                previousRow = currentRow;
                 continue;
             }
             appendBlankRows(output, blankRows);
             blankRows = 0;
-            int first = start;
-            while (first <= last && data[first] == 0) first++;
-            byte[] line = Arrays.copyOfRange(data, first, last + 1);
-            appendSuperBitmapLine(output, first - start, line);
+            DothanBitmapRowEncoder.RowCommand command =
+                    DothanBitmapRowEncoder.encode(currentRow, previousRow, raster.widthDots,
+                            compression);
+            output.write(command.bytes, 0, command.bytes.length);
+            previousRow = currentRow;
         }
         appendBlankRows(output, blankRows);
         int maxLine = Math.min(0x3FFF, maxBlackDots);
         int maxAverage = Math.min(0x3FFF, maxAverageBlackDots);
-        append(output, DothanFrameCodec.encode(0x25,
-                (byte) (0xC0 | (maxLine >>> 8)), (byte) maxLine,
-                (byte) (0xC0 | (maxAverage >>> 8)), (byte) maxAverage));
-        append(output, DothanFrameCodec.encode(0x28));
+        append(output, DothanCommandCatalog.bandStats(maxLine, maxAverage));
+        append(output, DothanCommandCatalog.pageEnd());
         return output.toByteArray();
     }
 
     private static void appendBlankRows(ByteArrayOutputStream output, int count) {
         while (count > 0) {
             int block = Math.min(count, 0x4000);
-            append(output, DothanFrameCodec.encode(0x22,
-                    DothanFrameCodec.variableShort(block - 1)));
+            append(output, DothanCommandCatalog.feedRows(block));
             count -= block;
         }
-    }
-
-    /** Super-bitmap line commands are stream records, not CRC-framed control packets. */
-    private static void appendSuperBitmapLine(ByteArrayOutputStream output, int skipBytes,
-                                              byte[] line) {
-        output.write(DothanFrameCodec.HEADER);
-        output.write(0x2B);
-        append(output, DothanFrameCodec.variableShort(skipBytes));
-        append(output, DothanFrameCodec.variableShort(line.length));
-        append(output, line);
     }
 
     private static void append(ByteArrayOutputStream output, byte[] value) {

@@ -57,7 +57,8 @@ public final class DothanFrameCodec {
             throw new IllegalArgumentException("P1 frame checksum mismatch");
         }
         return new DothanFrame(frame[1] & 0xFF,
-                Arrays.copyOfRange(frame, payloadOffset, payloadOffset + payloadLength));
+                Arrays.copyOfRange(frame, payloadOffset, payloadOffset + payloadLength),
+                frame.length >= 25 ? frame[23] & 0xFF : -1);
     }
 
     public static int encodedLength(byte[] buffer, int offset, int available) {
@@ -87,6 +88,20 @@ public final class DothanFrameCodec {
         if (first < 192) return first;
         if (offset + 1 >= payload.length) return -1;
         return ((first & 0x3F) << 8) | (payload[offset + 1] & 0xFF);
+    }
+
+    /** Reads the protocol's one/two-byte value or its three-byte 22-bit extension. */
+    public static int readVariableInteger(byte[] payload, int offset) {
+        if (payload == null || offset < 0 || offset >= payload.length) return -1;
+        int first = payload[offset] & 0xFF;
+        if (first < 192) return first;
+        int remaining = payload.length - offset;
+        if (remaining >= 3) {
+            return ((first & 0x3F) << 16)
+                    | ((payload[offset + 1] & 0xFF) << 8)
+                    | (payload[offset + 2] & 0xFF);
+        }
+        return readVariableShort(payload, offset);
     }
 
     public static byte[] join(byte[]... values) {

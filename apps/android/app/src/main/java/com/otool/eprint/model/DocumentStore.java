@@ -8,7 +8,7 @@ import org.json.JSONException;
 public final class DocumentStore {
     private static final String PREFERENCES = "eprint_native";
     private static final String DOCUMENT_KEY = "label_document_v1";
-    private static final String COMPONENT_DOCUMENT_KEY = "label_document_component_v1";
+    private static final String COMPONENT_DOCUMENT_KEY = "label_document_component_v2";
 
     private DocumentStore() {}
 

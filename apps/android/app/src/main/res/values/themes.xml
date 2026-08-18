@@ -9,5 +9,18 @@
         <item name="android:statusBarColor">@color/eprint_green_dark</item>
         <item name="android:navigationBarColor">@color/eprint_paper</item>
         <item name="android:windowActionModeOverlay">true</item>
+        <!-- Android 15+ 边到边模式下系统栏衬底使用的窗口背景色 -->
+        <item name="android:windowBackground">@color/eprint_surface</item>
+        <!-- 全局按钮保留字体安全区，兼容三星等厂商的 CJK 字体度量。 -->
+        <item name="buttonStyle">@style/EPrintButton</item>
     </style>
+
+    <style name="EPrintButton" parent="Widget.AppCompat.Button">
+        <item name="android:includeFontPadding">true</item>
+        <item name="android:gravity">center</item>
+        <item name="android:paddingTop">0dp</item>
+        <item name="android:paddingBottom">0dp</item>
+    </style>
+
+    <style name="EPrintButton.Latin" parent="EPrintButton" />
 </resources>

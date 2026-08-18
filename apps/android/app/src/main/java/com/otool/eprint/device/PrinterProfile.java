@@ -1,6 +1,7 @@
 package com.otool.eprint.device;
 
 import com.otool.eprint.protocol.ProtocolType;
+import com.otool.eprint.protocol.DothanCompressionMode;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -32,6 +33,13 @@ public final class PrinterProfile {
     public final boolean autoFeed;
     public final boolean beep;
     public final int autoPowerOffMinutes;
+    public final int motorMode;
+    public final int language;
+    public final boolean applyDothanExtras;
+    public final DothanCompressionMode compression;
+    public final boolean useDefaultDothanAuth;
+    public final String helloTokenHex;
+    public final String loginTokenHex;
     public final List<String> nameTokens;
     public final List<UUID> preferredBleServices;
     public final List<UUID> preferredBleWrites;
@@ -76,6 +84,13 @@ public final class PrinterProfile {
         this.autoFeed = true;
         this.beep = false;
         this.autoPowerOffMinutes = 0;
+        this.motorMode = 0;
+        this.language = 0;
+        this.applyDothanExtras = false;
+        this.compression = DothanCompressionMode.UNCOMPRESSED;
+        this.useDefaultDothanAuth = false;
+        this.helloTokenHex = "";
+        this.loginTokenHex = "";
         this.nameTokens = Collections.unmodifiableList(Arrays.asList(nameTokens));
         this.preferredBleServices = toUuids(serviceUuids);
         this.preferredBleWrites = toUuids(writeUuids);
@@ -86,7 +101,10 @@ public final class PrinterProfile {
                            String[] serviceUuids, String[] writeUuids, String manufacturer,
                            String deviceType, int printDensity, int printSpeed,
                            PaperType paperType, int gapLengthTenthsMm, boolean autoFeed,
-                           boolean beep, int autoPowerOffMinutes) {
+                           boolean beep, int autoPowerOffMinutes, int motorMode, int language,
+                           boolean applyDothanExtras, DothanCompressionMode compression,
+                           boolean useDefaultDothanAuth, String helloTokenHex,
+                           String loginTokenHex) {
         this.id = base.id;
         this.label = base.label;
         this.protocol = base.protocol;
@@ -111,6 +129,13 @@ public final class PrinterProfile {
         this.autoFeed = autoFeed;
         this.beep = beep;
         this.autoPowerOffMinutes = autoPowerOffMinutes;
+        this.motorMode = motorMode;
+        this.language = language;
+        this.applyDothanExtras = applyDothanExtras;
+        this.compression = compression;
+        this.useDefaultDothanAuth = useDefaultDothanAuth;
+        this.helloTokenHex = helloTokenHex == null ? "" : helloTokenHex;
+        this.loginTokenHex = loginTokenHex == null ? "" : loginTokenHex;
         this.nameTokens = base.nameTokens;
         this.preferredBleServices = toUuids(serviceUuids);
         this.preferredBleWrites = toUuids(writeUuids);
@@ -145,7 +170,8 @@ public final class PrinterProfile {
         return new PrinterProfile(this, widthDots, sppChunk, bleChunk, usbChunk, delayMs,
                 retries, rasterThreshold, serviceUuids, writeUuids, manufacturer, deviceType,
                 printDensity, printSpeed, paperType, gapLengthTenthsMm, autoFeed, beep,
-                autoPowerOffMinutes);
+                autoPowerOffMinutes, motorMode, language, applyDothanExtras, compression,
+                useDefaultDothanAuth, helloTokenHex, loginTokenHex);
     }
 
     public PrinterProfile withDeviceSettings(String maker, String type, int density, int speed,
@@ -156,7 +182,40 @@ public final class PrinterProfile {
                 usbChunkBytes, writeDelayMs, maxWriteRetries, threshold,
                 preferredBleServiceStrings(), preferredBleWriteStrings(), maker, type,
                 density, speed, media, gapTenthsMm, shouldAutoFeed, shouldBeep,
-                powerOffMinutes);
+                powerOffMinutes, motorMode, language, applyDothanExtras, compression,
+                useDefaultDothanAuth, helloTokenHex, loginTokenHex);
+    }
+
+    public PrinterProfile withDothanOptions(DothanCompressionMode compression,
+                                            String helloTokenHex, String loginTokenHex) {
+        return withDothanOptions(compression, useDefaultDothanAuth,
+                helloTokenHex, loginTokenHex);
+    }
+
+    public PrinterProfile withDothanOptions(DothanCompressionMode compression,
+                                            boolean useDefaultAuth,
+                                            String helloTokenHex, String loginTokenHex) {
+        return new PrinterProfile(this, printableWidthDots, sppChunkBytes, bleChunkBytes,
+                usbChunkBytes, writeDelayMs, maxWriteRetries, threshold,
+                preferredBleServiceStrings(), preferredBleWriteStrings(), manufacturer,
+                deviceType, printDensity, printSpeed, paperType, gapLengthTenthsMm, autoFeed,
+                beep, autoPowerOffMinutes, motorMode, language, applyDothanExtras,
+                compression == null ? DothanCompressionMode.UNCOMPRESSED : compression,
+                useDefaultAuth, helloTokenHex, loginTokenHex);
+    }
+
+    public PrinterProfile withDothanExtras(int motorMode, int language) {
+        return withDothanExtras(motorMode, language, applyDothanExtras);
+    }
+
+    public PrinterProfile withDothanExtras(int motorMode, int language,
+                                           boolean shouldApplyExtras) {
+        return new PrinterProfile(this, printableWidthDots, sppChunkBytes, bleChunkBytes,
+                usbChunkBytes, writeDelayMs, maxWriteRetries, threshold,
+                preferredBleServiceStrings(), preferredBleWriteStrings(), manufacturer,
+                deviceType, printDensity, printSpeed, paperType, gapLengthTenthsMm, autoFeed,
+                beep, autoPowerOffMinutes, motorMode, language, shouldApplyExtras, compression,
+                useDefaultDothanAuth, helloTokenHex, loginTokenHex);
     }
 
     public String[] preferredBleServiceStrings() {

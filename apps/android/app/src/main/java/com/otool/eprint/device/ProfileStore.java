@@ -4,6 +4,8 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.text.TextUtils;
 
+import com.otool.eprint.protocol.DothanCompressionMode;
+
 import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.Locale;
@@ -36,6 +38,20 @@ public final class ProfileStore {
                     TextUtils.join(",", base.preferredBleServiceStrings()));
             String writes = values.getString(prefix + "ble_writes",
                     TextUtils.join(",", base.preferredBleWriteStrings()));
+            String compressionName = values.getString(prefix + "dothan_compression",
+                    base.compression.name());
+            DothanCompressionMode compression = parseCompression(
+                    compressionName, base.compression);
+            String helloToken = values.getString(prefix + "dothan_hello_token",
+                    base.helloTokenHex);
+            String loginToken = values.getString(prefix + "dothan_login_token",
+                    base.loginTokenHex);
+            boolean defaultAuth = values.getBoolean(prefix + "dothan_default_auth",
+                    base.useDefaultDothanAuth);
+            int motorMode = values.getInt(prefix + "dothan_motor_mode", base.motorMode);
+            int language = values.getInt(prefix + "dothan_language", base.language);
+            boolean applyExtras = values.getBoolean(prefix + "dothan_apply_extras",
+                    base.applyDothanExtras);
             int density = values.getInt(prefix + "print_density", base.printDensity);
             int speed = values.getInt(prefix + "print_speed", base.printSpeed);
             int gap = values.getInt(prefix + "gap_tenths_mm", base.gapLengthTenthsMm);
@@ -45,7 +61,9 @@ public final class ProfileStore {
             PrinterProfile hardware = base.withHardwareSettings(width, spp, ble, usb, delay,
                     retries, threshold,
                     mergeUuids(base.preferredBleServiceStrings(), splitUuids(services)),
-                    mergeUuids(base.preferredBleWriteStrings(), splitUuids(writes)));
+                    mergeUuids(base.preferredBleWriteStrings(), splitUuids(writes)))
+                    .withDothanOptions(compression, defaultAuth, helloToken, loginToken)
+                    .withDothanExtras(motorMode, language, applyExtras);
             return hardware.withDeviceSettings(base.manufacturer, base.deviceType, density, speed,
                     paper, gap, values.getBoolean(prefix + "auto_feed", base.autoFeed),
                     values.getBoolean(prefix + "beep", base.beep), powerOff);
@@ -72,6 +90,13 @@ public final class ProfileStore {
                 .putBoolean(prefix + "auto_feed", profile.autoFeed)
                 .putBoolean(prefix + "beep", profile.beep)
                 .putInt(prefix + "auto_power_off", profile.autoPowerOffMinutes)
+                .putString(prefix + "dothan_compression", profile.compression.name())
+                .putString(prefix + "dothan_hello_token", profile.helloTokenHex)
+                .putString(prefix + "dothan_login_token", profile.loginTokenHex)
+                .putBoolean(prefix + "dothan_default_auth", profile.useDefaultDothanAuth)
+                .putInt(prefix + "dothan_motor_mode", profile.motorMode)
+                .putInt(prefix + "dothan_language", profile.language)
+                .putBoolean(prefix + "dothan_apply_extras", profile.applyDothanExtras)
                 .putString(prefix + "ble_services", TextUtils.join(",", profile.preferredBleServiceStrings()))
                 .putString(prefix + "ble_writes", TextUtils.join(",", profile.preferredBleWriteStrings()))
                 .apply();
@@ -88,6 +113,13 @@ public final class ProfileStore {
                 .putInt(prefix + "delay", profile.writeDelayMs)
                 .putInt(prefix + "retries", profile.maxWriteRetries)
                 .putInt(prefix + "threshold", profile.threshold)
+                .putString(prefix + "dothan_compression", profile.compression.name())
+                .putString(prefix + "dothan_hello_token", profile.helloTokenHex)
+                .putString(prefix + "dothan_login_token", profile.loginTokenHex)
+                .putBoolean(prefix + "dothan_default_auth", profile.useDefaultDothanAuth)
+                .putInt(prefix + "dothan_motor_mode", profile.motorMode)
+                .putInt(prefix + "dothan_language", profile.language)
+                .putBoolean(prefix + "dothan_apply_extras", profile.applyDothanExtras)
                 .putString(prefix + "ble_services", TextUtils.join(",", profile.preferredBleServiceStrings()))
                 .putString(prefix + "ble_writes", TextUtils.join(",", profile.preferredBleWriteStrings()))
                 .apply();
@@ -95,6 +127,15 @@ public final class ProfileStore {
 
     private static SharedPreferences preferences(Context context) {
         return context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE);
+    }
+
+    private static DothanCompressionMode parseCompression(
+            String value, DothanCompressionMode fallback) {
+        try {
+            return DothanCompressionMode.valueOf(value);
+        } catch (IllegalArgumentException | NullPointerException invalidStoredValue) {
+            return fallback;
+        }
     }
 
     private static String[] splitUuids(String value) {

@@ -46,7 +46,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="2dp"
-                        android:text="● v1.3 · 本机离线工作"
+                        android:text="● 本机离线工作"
                         android:textColor="#BFE3D8"
                         android:textSize="12sp" />
                 </LinearLayout>
@@ -209,7 +209,7 @@
                 android:background="@drawable/button_secondary"
                 android:minHeight="0dp"
                 android:minWidth="0dp"
-                android:text="添加文本"
+                android:text="编辑"
                 android:textAllCaps="false"
                 android:textColor="@color/eprint_text" />
         </LinearLayout>
@@ -319,11 +319,17 @@
                     android:maxLines="1"
                     android:selectAllOnFocus="true" />
 
-                <Spinner
+                <TextView
                     android:id="@+id/dpiSpinner"
-                    android:layout_width="96dp"
+                    android:layout_width="wrap_content"
                     android:layout_height="48dp"
-                    android:layout_marginStart="8dp" />
+                    android:layout_marginStart="8dp"
+                    android:gravity="center"
+                    android:paddingStart="6dp"
+                    android:paddingEnd="6dp"
+                    android:text="203 DPI"
+                    android:textColor="@color/eprint_text"
+                    android:textSize="14sp" />
 
                 <Button
                     android:id="@+id/applySizeButton"

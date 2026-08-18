@@ -10,33 +10,29 @@ public final class DothanDeviceSettingsEncoder {
         if (profile == null || profile.protocol != ProtocolType.DOTHAN_PRIVATE) {
             throw new IllegalArgumentException("P1 settings require a Dothan private profile");
         }
+        byte[] experimentalExtras = profile.applyDothanExtras
+                ? DothanFrameCodec.join(
+                setting(DothanCommandCatalog.motorMode(profile.motorMode)),
+                setting(DothanCommandCatalog.language(profile.language)))
+                : new byte[0];
         return DothanFrameCodec.join(
-                setting(DothanFrameCodec.encode(0x43,
-                        (byte) DothanProtocolEncoder.wireLevel(profile.printDensity))),
-                setting(DothanFrameCodec.encode(0x44,
-                        (byte) DothanProtocolEncoder.wireLevel(profile.printSpeed))),
-                setting(DothanFrameCodec.encode(0x42,
-                        (byte) DothanProtocolEncoder.gapType(profile.paperType))),
-                setting(DothanFrameCodec.encode(0x45,
-                        DothanProtocolEncoder.distanceHundredthsMm(profile.gapLengthTenthsMm))),
-                setting(DothanFrameCodec.encode(0x4D,
-                        (byte) (profile.autoFeed ? 1 : 0), (byte) 0, (byte) 0,
-                        (byte) 4, (byte) 0)),
-                setting(DothanFrameCodec.encode(0x4D,
-                        // P1 stores this bit as "mute": 0 means the completion prompt is on.
-                        (byte) (profile.beep ? 0 : 1), (byte) 0, (byte) 0,
-                        (byte) 8, (byte) 0)),
-                setting(DothanFrameCodec.encode(0x48,
-                        DothanFrameCodec.variableShort(profile.autoPowerOffMinutes)))
+                setting(DothanCommandCatalog.density(profile.printDensity)),
+                setting(DothanCommandCatalog.speed(profile.printSpeed)),
+                setting(DothanCommandCatalog.gapType(profile.paperType)),
+                setting(DothanCommandCatalog.gapLength(profile.gapLengthTenthsMm)),
+                setting(DothanCommandCatalog.flags(profile.autoFeed ? 1 : 0, 4)),
+                setting(DothanCommandCatalog.flags(profile.beep ? 0 : 1, 8)),
+                setting(DothanCommandCatalog.autoPowerOffMinutes(profile.autoPowerOffMinutes)),
+                experimentalExtras
         );
     }
 
     private static byte[] setting(byte[] command) {
         return DothanFrameCodec.join(
-                DothanFrameCodec.encode(0x80, (byte) 0x7F),
+                DothanCommandCatalog.sessionStart(false),
                 command,
-                DothanFrameCodec.encode(0x80, (byte) 0),
-                DothanFrameCodec.encode(0x77)
+                DothanCommandCatalog.sessionClose(),
+                DothanCommandCatalog.bufferQuery()
         );
     }
 }

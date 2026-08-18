@@ -44,6 +44,39 @@ public final class MonochromeRaster {
         return Arrays.copyOf(data, data.length);
     }
 
+    public boolean getBit(int x, int y) {
+        if (x < 0 || y < 0 || x >= widthDots || y >= heightDots) return false;
+        int index = y * widthBytes + (x >>> 3);
+        return (data[index] & (0x80 >>> (x & 7))) != 0;
+    }
+
+    /** 生成严格黑白、无插值的 1-bit 预览图。 */
+    public Bitmap toBitmap() {
+        Bitmap bitmap = Bitmap.createBitmap(widthDots, heightDots, Bitmap.Config.ARGB_8888);
+        int[] pixels = new int[widthDots];
+        for (int y = 0; y < heightDots; y++) {
+            for (int x = 0; x < widthDots; x++) {
+                pixels[x] = getBit(x, y) ? Color.BLACK : Color.WHITE;
+            }
+            bitmap.setPixels(pixels, 0, widthDots, 0, y, widthDots, 1);
+        }
+        return bitmap;
+    }
+
+    /** 只反转有效打印点，不污染每行末尾的字节填充位。 */
+    public MonochromeRaster inverted() {
+        byte[] output = new byte[data.length];
+        for (int y = 0; y < heightDots; y++) {
+            for (int x = 0; x < widthDots; x++) {
+                if (!getBit(x, y)) {
+                    int index = y * widthBytes + (x >>> 3);
+                    output[index] |= (byte) (0x80 >>> (x & 7));
+                }
+            }
+        }
+        return new MonochromeRaster(widthDots, heightDots, output);
+    }
+
     public void writeRows(java.io.ByteArrayOutputStream output, int firstRow, int rowCount) {
         output.write(data, firstRow * widthBytes, rowCount * widthBytes);
     }

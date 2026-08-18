@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 紧凑版下拉框收起项：用于空间受限的 Spinner（DPI、协议档案），
+     14sp 保证 "203 DPI" 与长档案名完整或干净省略显示。 -->
+<TextView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@android:id/text1"
+    style="?android:attr/spinnerItemStyle"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:ellipsize="end"
+    android:singleLine="true"
+    android:textSize="14sp" />
