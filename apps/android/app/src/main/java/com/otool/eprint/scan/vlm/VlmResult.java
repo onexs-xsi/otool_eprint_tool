@@ -1,7 +1,7 @@
 package com.otool.eprint.scan.vlm;
 
 /**
- * VLM（GLM-OCR）单图识别结果：全文 + benchmark 埋点。
+ * VLM（GLM-OCR）单图信息提取结果：严格 JSON 文本 + benchmark 埋点。
  * error 非空表示失败（此时 text 可能为部分输出）。
  */
 public final class VlmResult {

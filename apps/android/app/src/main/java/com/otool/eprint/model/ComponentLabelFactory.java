@@ -22,7 +22,18 @@ public final class ComponentLabelFactory {
     public static LabelDocument create(ComponentRecord record, int dpi,
                                        float widthMm, float heightMm,
                                        ComponentTemplate template, boolean boldHeadline,
-                                       boolean showTrace, boolean largeFont) {
+                                       boolean showBrand, boolean largeFont) {
+        ComponentFieldSelection defaults = ComponentFieldSelection.defaults();
+        return create(record, dpi, widthMm, heightMm, template, boldHeadline, largeFont,
+                new ComponentFieldSelection(defaults.model, defaults.category,
+                        defaults.specification, defaults.packageName, showBrand,
+                        defaults.parameters, defaults.supplierPartNumber));
+    }
+
+    public static LabelDocument create(ComponentRecord record, int dpi,
+                                       float widthMm, float heightMm,
+                                       ComponentTemplate template, boolean boldHeadline,
+                                       boolean largeFont, ComponentFieldSelection fields) {
         LabelDocument document = new LabelDocument();
         document.widthMm = widthMm;
         document.heightMm = heightMm;
@@ -30,91 +41,122 @@ public final class ComponentLabelFactory {
         document.elements.clear();
         switch (template) {
             case COMPACT:
-                buildCompact(document, record, boldHeadline, largeFont);
+                buildCompact(document, record, boldHeadline, largeFont, fields);
                 break;
             case DETAILED:
-                buildDetailed(document, record, boldHeadline, showTrace, largeFont);
+                buildDetailed(document, record, boldHeadline, largeFont, fields);
                 break;
             case STANDARD:
             default:
-                buildStandard(document, record, boldHeadline, showTrace, largeFont);
+                buildStandard(document, record, boldHeadline, largeFont, fields);
                 break;
         }
         float xScale = widthMm / 25f;
         float yScale = heightMm / 15f;
-        float fontScale = Math.min(xScale, yScale) * (largeFont ? 1.15f : 1f);
+        float fontScale = Math.min(xScale, yScale);
         for (TextElement element : document.elements) {
             element.xMm *= xScale;
             element.yMm *= yScale;
             element.widthMm *= xScale;
-            element.fontSizePt = LabelDocument.clamp(element.fontSizePt * fontScale, 6f, 24f);
+            element.fontSizePt = LabelDocument.clamp(element.fontSizePt * fontScale, 4.5f, 24f);
         }
         document.normalize();
         return document;
     }
 
-    /** 简洁模板：型号单行大字，在标签内水平垂直居中。 */
+    /** 简洁模板：固定前缀列的四项技术身份；任何情况下都不显示立创料号。 */
     private static void buildCompact(LabelDocument document, ComponentRecord record,
-                                     boolean boldHeadline, boolean largeFont) {
-        String headline = first(record.manufacturerPartNumber, record.supplierPartNumber,
-                "未识别器件");
-        float fontPt = largeFont ? 14f : 12f;
-        float lineMm = fontPt * 25.4f / 72f;
-        TextElement element = text("component_model", headline, 1.2f,
-                Math.max(0f, (15f - lineMm) / 2f), 22.6f, fontPt,
-                boldHeadline, TextElement.ALIGN_CENTER);
-        document.elements.add(element);
+                                     boolean boldHeadline, boolean largeFont,
+                                     ComponentFieldSelection fields) {
+        List<FieldRow> rows = new ArrayList<>();
+        addBaseRows(rows, record, boldHeadline, fields);
+        addFixedRows(document, rows, largeFont);
     }
 
-    /** 标准模板：型号标题 + 料号/数量 + 可选追溯行（v1 版面）。 */
+    /** 标准模板：固定前缀列的基础技术字段、可选品牌和立创料号。 */
     private static void buildStandard(LabelDocument document, ComponentRecord record,
-                                      boolean boldHeadline, boolean showTrace, boolean largeFont) {
-        String headline = first(record.manufacturerPartNumber, record.supplierPartNumber,
-                "未识别器件");
-        document.elements.add(text("component_model", headline, 1.2f, 1.0f,
-                22.6f, 9.5f, boldHeadline, TextElement.ALIGN_LEFT));
-        String second = join("  ", record.supplierPartNumber,
-                record.quantity > 0 ? "QTY " + record.quantity : "");
-        if (!second.isEmpty()) {
-            document.elements.add(text("component_part", second, 1.2f, 7.0f,
-                    22.6f, 7.5f, boldHeadline, TextElement.ALIGN_LEFT));
+                                      boolean boldHeadline, boolean largeFont,
+                                      ComponentFieldSelection fields) {
+        List<FieldRow> rows = new ArrayList<>();
+        addBaseRows(rows, record, boldHeadline, fields);
+        if (fields.brand) {
+            rows.add(new FieldRow("component_brand", "品牌:", field(record, "厂商"), false));
         }
-        if (showTrace) {
-            String third = join("  ", record.orderNumber,
-                    record.trackingId.isEmpty() ? "" : "#" + record.trackingId);
-            if (!third.isEmpty()) {
-                document.elements.add(text("component_trace", third, 1.2f, 11.2f,
-                        22.6f, 6.0f, false, TextElement.ALIGN_LEFT));
-            }
+        if (fields.supplierPartNumber) {
+            rows.add(new FieldRow("component_supplier", "立创:", record.supplierPartNumber, false));
+        }
+        addFixedRows(document, rows, largeFont);
+    }
+
+    /** 完整模板：固定前缀列展开全部结构化技术字段；采购/追溯字段仍不进入标签。 */
+    private static void buildDetailed(LabelDocument document, ComponentRecord record,
+                                      boolean boldHeadline, boolean largeFont,
+                                      ComponentFieldSelection fields) {
+        List<FieldRow> rows = new ArrayList<>();
+        addBaseRows(rows, record, boldHeadline, fields);
+        if (fields.brand) {
+            rows.add(new FieldRow("component_brand", "品牌:", field(record, "厂商"), false));
+        }
+        if (fields.parameters) {
+            rows.add(new FieldRow("component_parameters", "参数:", field(record, "参数"), false));
+        }
+        if (fields.supplierPartNumber) {
+            rows.add(new FieldRow("component_supplier", "立创:", record.supplierPartNumber, false));
+        }
+        addFixedRows(document, rows, largeFont);
+    }
+
+    private static void addBaseRows(List<FieldRow> rows, ComponentRecord record,
+                                    boolean boldHeadline, ComponentFieldSelection fields) {
+        if (fields.model) {
+            rows.add(new FieldRow("component_model", "型号:", record.manufacturerPartNumber,
+                    boldHeadline));
+        }
+        if (fields.category) {
+            rows.add(new FieldRow("component_category", "品类:", field(record, "品类"), false));
+        }
+        if (fields.specification) {
+            rows.add(new FieldRow("component_spec", "规格:", field(record, "规格"), false));
+        }
+        if (fields.packageName) {
+            rows.add(new FieldRow("component_package", "封装:", field(record, "封装"), false));
         }
     }
 
-    /** 完整模板：全部字段小字多行，按实际有数据的行均分高度。 */
-    private static void buildDetailed(LabelDocument document, ComponentRecord record,
-                                      boolean boldHeadline, boolean showTrace, boolean largeFont) {
-        List<String[]> lines = new ArrayList<>();
-        lines.add(new String[]{"component_model",
-                first(record.manufacturerPartNumber, record.supplierPartNumber, "未识别器件"),
-                "headline"});
-        if (!record.supplierPartNumber.isEmpty()) {
-            lines.add(new String[]{"component_supplier", "料号 " + record.supplierPartNumber, "body"});
+    /** 前缀和值拆成两个元素；所有模板使用完全相同的 x/width，缺值也保留前缀元素。 */
+    private static void addFixedRows(LabelDocument document, List<FieldRow> rows,
+                                     boolean largeFont) {
+        float topMm = 0.45f;
+        float stepMm = 14.1f / Math.max(1, rows.size());
+        boolean crowded = rows.size() >= 6;
+        float prefixPt = crowded ? 4.8f : (largeFont ? 5.8f : 5.3f);
+        float valuePt = crowded ? (largeFont ? 5.4f : 5.0f) : (largeFont ? 7.0f : 6.2f);
+        for (int index = 0; index < rows.size(); index++) {
+            FieldRow row = rows.get(index);
+            float y = topMm + stepMm * index;
+            document.elements.add(text(row.id + "_prefix", row.prefix, 0.4f, y,
+                    4.1f, prefixPt, false, TextElement.ALIGN_RIGHT));
+            document.elements.add(text(row.id, row.value, 4.7f, y,
+                    19.9f, valuePt, row.boldValue, TextElement.ALIGN_LEFT));
         }
-        if (record.quantity > 0) {
-            lines.add(new String[]{"component_quantity", "数量 " + record.quantity, "body"});
-        }
-        if (showTrace) {
-            String trace = join("  ", record.orderNumber,
-                    record.trackingId.isEmpty() ? "" : "#" + record.trackingId);
-            if (!trace.isEmpty()) lines.add(new String[]{"component_trace", trace, "trace"});
-        }
-        float topMm = 0.8f;
-        float stepMm = (15f - topMm * 2f) / Math.max(1, lines.size());
-        for (int index = 0; index < lines.size(); index++) {
-            String[] line = lines.get(index);
-            boolean headline = "headline".equals(line[2]);
-            float fontPt = headline ? 8f : ("body".equals(line[2]) ? 7f : 6f);
-            document.elements.add(text(line[0], line[1], 1.2f, topMm + stepMm * index,
-                    22.6f, fontPt, headline && boldHeadline, TextElement.ALIGN_LEFT));
+    }
+
+    private static String field(ComponentRecord record, String key) {
+        String value = record.fields.get(key);
+        return value == null ? "" : value.trim();
+    }
+
+    private static final class FieldRow {
+        final String id;
+        final String prefix;
+        final String value;
+        final boolean boldValue;
+
+        FieldRow(String id, String prefix, String value, boolean boldValue) {
+            this.id = id;
+            this.prefix = prefix;
+            this.value = value == null ? "" : value;
+            this.boldValue = boldValue;
         }
     }
 
@@ -123,7 +165,7 @@ public final class ComponentLabelFactory {
         TextElement element = new TextElement();
         element.id = id;
         // 长料号自动缩字，保证单行不折行（折行会让各行在 15 mm 标签上重叠）；
-        // 缩到下限仍超宽时截断末尾，保住订单号等关键前缀。
+        // 缩到下限仍超宽时截断末尾，保住型号等关键身份字段。
         float fontPt = fitFontPt(value, width, points, bold);
         String fitted = value;
         if (fontPt <= MIN_FONT_PT && estimatedMm(value, fontPt, bold) > width) {
@@ -139,7 +181,8 @@ public final class ComponentLabelFactory {
         return element;
     }
 
-    private static final float MIN_FONT_PT = 6f;
+    /** 固定前缀列压缩了值列；4.5pt 在 203 DPI 下约 13 像素，仍可完整保留长 MPN。 */
+    private static final float MIN_FONT_PT = 4.5f;
 
     /** 估算文本宽度（全角 1em、半角 0.55em），超过可用宽度时按比例缩小字号。 */
     static float fitFontPt(String value, float widthMm, float points, boolean bold) {
@@ -165,18 +208,4 @@ public final class ComponentLabelFactory {
         return emUnits * fontPt * 25.4f / 72f * (bold ? 1.08f : 1f);
     }
 
-    private static String first(String... values) {
-        for (String value : values) if (value != null && !value.isEmpty()) return value;
-        return "";
-    }
-
-    private static String join(String separator, String... values) {
-        StringBuilder result = new StringBuilder();
-        for (String value : values) {
-            if (value == null || value.isEmpty()) continue;
-            if (result.length() > 0) result.append(separator);
-            result.append(value);
-        }
-        return result.toString();
-    }
 }

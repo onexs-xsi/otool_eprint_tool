@@ -103,6 +103,32 @@
                 android:background="#071512"
                 app:zxing_use_texture_view="true" />
 
+            <ImageView
+                android:id="@+id/processingPreview"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="#071512"
+                android:contentDescription="识别处理过程画面"
+                android:scaleType="fitCenter"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/processingStageBadge"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="top|start"
+                android:layout_margin="8dp"
+                android:background="@drawable/card_background"
+                android:paddingStart="9dp"
+                android:paddingTop="5dp"
+                android:paddingEnd="9dp"
+                android:paddingBottom="5dp"
+                android:text="处理阶段"
+                android:textColor="@color/eprint_text"
+                android:textSize="11sp"
+                android:textStyle="bold"
+                android:visibility="gone" />
+
             <com.otool.eprint.view.LabelGuideOverlay
                 android:id="@+id/labelGuideOverlay"
                 android:layout_width="match_parent"
@@ -156,7 +182,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="扫码原文"
+                    android:text="结果类别"
                     android:textColor="@color/eprint_text"
                     android:textSize="12sp"
                     android:textStyle="bold" />
@@ -170,7 +196,7 @@
                         android:id="@+id/qrResultText"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="等待扫码…"
+                        android:text="暂无结果"
                         android:textColor="@color/eprint_muted"
                         android:textIsSelectable="true"
                         android:textSize="12sp" />
@@ -187,7 +213,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="本机解析"
+                    android:text="最终完整识别结果"
                     android:textColor="@color/eprint_text"
                     android:textSize="12sp"
                     android:textStyle="bold" />
@@ -201,7 +227,7 @@
                         android:id="@+id/qrParseSummary"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="全部解析在本机完成"
+                        android:text="识别完成后按类别显示"
                         android:textColor="@color/eprint_muted"
                         android:textIsSelectable="true"
                         android:textSize="12sp" />
@@ -827,26 +853,107 @@
                             android:textColor="@color/eprint_muted"
                             android:textSize="11sp" />
 
-                        <CheckBox
-                            android:id="@+id/templateBoldCheck"
+                        <LinearLayout
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="标题加粗"
-                            android:textSize="13sp" />
+                            android:orientation="horizontal">
 
-                        <CheckBox
-                            android:id="@+id/templateTraceCheck"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:text="显示追溯行（订单 / 追踪号）"
-                            android:textSize="13sp" />
+                            <CheckBox
+                                android:id="@+id/templateBoldCheck"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="标题加粗"
+                                android:textSize="11sp" />
 
-                        <CheckBox
-                            android:id="@+id/templateLargeFontCheck"
+                            <CheckBox
+                                android:id="@+id/templateLargeFontCheck"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="加大字号"
+                                android:textSize="11sp" />
+                        </LinearLayout>
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="启用字段类别"
+                            android:textColor="@color/eprint_muted"
+                            android:textSize="10sp" />
+
+                        <LinearLayout
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="加大字号"
-                            android:textSize="13sp" />
+                            android:orientation="horizontal">
+
+                            <CheckBox
+                                android:id="@+id/templateModelCheck"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="型号"
+                                android:textSize="11sp" />
+
+                            <CheckBox
+                                android:id="@+id/templateCategoryCheck"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="品类"
+                                android:textSize="11sp" />
+
+                            <CheckBox
+                                android:id="@+id/templateSpecCheck"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="规格"
+                                android:textSize="11sp" />
+
+                            <CheckBox
+                                android:id="@+id/templatePackageCheck"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="封装"
+                                android:textSize="11sp" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal">
+
+                            <CheckBox
+                                android:id="@+id/templateBrandCheck"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="品牌"
+                                android:textSize="11sp" />
+
+                            <CheckBox
+                                android:id="@+id/templateParametersCheck"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="参数"
+                                android:textSize="11sp" />
+
+                            <CheckBox
+                                android:id="@+id/templateSupplierCheck"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="立创料号"
+                                android:textSize="11sp" />
+
+                            <Space
+                                android:layout_width="0dp"
+                                android:layout_height="1dp"
+                                android:layout_weight="1" />
+                        </LinearLayout>
                     </LinearLayout>
 
                     <LinearLayout
@@ -887,7 +994,7 @@
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="供应商识别"
+                            android:text="识别日志"
                             android:textColor="@color/eprint_text"
                             android:textStyle="bold" />
 
@@ -908,9 +1015,9 @@
                         android:layout_height="0dp"
                         android:layout_marginTop="4dp"
                         android:layout_weight="1"
-                        android:ellipsize="end"
-                        android:maxLines="8"
-                        android:text="等待供应商贴纸二维码；识别后在本机生成器件标签"
+                        android:fadeScrollbars="false"
+                        android:scrollbars="vertical"
+                        android:text="等待识别任务…"
                         android:textColor="@color/eprint_muted"
                         android:textIsSelectable="true"
                         android:textSize="12sp" />

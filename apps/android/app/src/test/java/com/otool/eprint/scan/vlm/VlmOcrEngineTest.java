@@ -50,13 +50,15 @@ public class VlmOcrEngineTest {
     }
 
     @Test
-    public void buildTranscribePrompt_embedsImgTagAndTrigger() {
+    public void buildInformationExtractionPrompt_embedsImgTagAndCompleteSchema() {
         File image = new File("/sdcard/Android/data/com.otool.eprint/cache/vlm_input.png");
-        String prompt = VlmOcrEngine.buildTranscribePrompt(image);
+        String prompt = VlmOcrEngine.buildInformationExtractionPrompt(image);
         assertTrue(prompt.startsWith("<img>"));
-        assertTrue(prompt.endsWith("</img>" + VlmOcrEngine.TRANSCRIBE_PROMPT));
+        assertTrue(prompt.endsWith("</img>" + VlmOcrEngine.INFORMATION_EXTRACTION_PROMPT));
         assertTrue(prompt.contains(image.getAbsolutePath()));
-        assertTrue(VlmOcrEngine.buildTranscribePrompt(image, "Custom OCR:")
+        assertTrue(prompt.contains("manufacturer_part_number"));
+        assertTrue(prompt.contains("parameters"));
+        assertTrue(VlmOcrEngine.buildInformationExtractionPrompt(image, "Custom OCR:")
                 .endsWith("</img>Custom OCR:"));
     }
 
@@ -67,8 +69,8 @@ public class VlmOcrEngineTest {
         assertTrue(json.contains("\"thread_num\":4"));
         assertTrue(json.contains("\"precision\":\"low\""));
         assertTrue(json.contains("\"max_new_tokens\":1024"));
-        assertTrue(json.contains("\"penalty\":1.6"));
-        assertTrue(json.contains("\"presence_penalty\":0.8"));
+        assertTrue(json.contains("\"penalty\":1.1"));
+        assertTrue(json.contains("\"presence_penalty\":0.0"));
         // 简单括号配平校验，防手抖写坏 JSON。
         assertEquals(json.chars().filter(c -> c == '{').count(),
                 json.chars().filter(c -> c == '}').count());

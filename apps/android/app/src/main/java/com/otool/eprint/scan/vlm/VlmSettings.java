@@ -2,7 +2,25 @@ package com.otool.eprint.scan.vlm;
 
 /** 可持久化的 GLM-OCR 运行参数。构造时统一校验，避免无效配置传入 native。 */
 public final class VlmSettings {
-    public static final String DEFAULT_PROMPT = "Text Recognition:";
+    /**
+     * GLM-OCR 官方“信息提取”模式要求严格 JSON。该 schema 覆盖三档模板的全部技术字段，
+     * parameters 继续承载不同器件特有参数，保证一次识别可供全部模板取用。
+     */
+    public static final String DEFAULT_PROMPT =
+            "请按下列 JSON 格式输出电子元器件标签信息，只输出 JSON：\n"
+            + "{\n"
+            + "  \"manufacturer_part_number\": \"\",\n"
+            + "  \"lcsc_part_number\": \"\",\n"
+            + "  \"category\": \"\",\n"
+            + "  \"specification\": \"\",\n"
+            + "  \"package\": \"\",\n"
+            + "  \"brand\": \"\",\n"
+            + "  \"parameters\": [{\"name\": \"\", \"value\": \"\"}]\n"
+            + "}\n"
+            + "必须输出全部七个字段；未识别值用空字符串，parameters 无内容用空数组，不得猜测。\n"
+            + "specification 汇总关键规格，parameters 列出其余可见技术参数。\n"
+            + "忽略数量、订单、批次、追踪、仓储编码及二维码/一维码内容；不要输出 Markdown 或说明。";
+    static final String LEGACY_TRANSCRIBE_PROMPT = "Text Recognition:";
 
     public static final String[] BACKEND_VALUES = {"cpu", "opencl", "vulkan"};
     public static final String[] BACKEND_LABELS = {"CPU（兼容优先）", "OpenCL GPU", "Vulkan GPU"};
@@ -34,15 +52,14 @@ public final class VlmSettings {
         this.repetitionPenalty = clamp(repetitionPenalty, 1.0f, 3.0f);
         this.presencePenalty = clamp(presencePenalty, 0.0f, 2.0f);
         this.frequencyPenalty = clamp(frequencyPenalty, 0.0f, 2.0f);
-        String cleanPrompt = prompt == null ? "" : prompt.trim();
-        this.prompt = cleanPrompt.isEmpty() ? DEFAULT_PROMPT : cleanPrompt;
+        this.prompt = completeExtractionPrompt(prompt);
     }
 
     public static VlmSettings defaults() {
-        // GLM-OCR 原始 penalty=1.1 在部分电子料标签上会陷入单 token 循环。
-        // 该组确定性 penalty 参数经 SM-X800 真机复现图验证，可让模型恢复正文生成。
+        // 信息提取包含大量重复 JSON 标点和键名；使用接近官方默认的轻量重复惩罚，
+        // 避免高 presence/frequency penalty 破坏严格 schema。
         return new VlmSettings("cpu", 4, "low", "low", 1024, 60,
-                1.6f, 0.8f, 0.4f, DEFAULT_PROMPT);
+                1.1f, 0.0f, 0.0f, DEFAULT_PROMPT);
     }
 
     public long timeoutMs() {
@@ -77,6 +94,30 @@ public final class VlmSettings {
             }
         }
         return 0;
+    }
+
+    /** 旧“全文转写”配置自动迁移；自定义要求保留，但不能移除固定的完整 JSON schema。 */
+    static String completeExtractionPrompt(String prompt) {
+        String clean = prompt == null ? "" : prompt.trim();
+        if (clean.isEmpty() || isLegacyTranscribePrompt(clean)) {
+            return DEFAULT_PROMPT;
+        }
+        if (hasCompleteSchema(clean)) return clean;
+        return clean + "\n\n" + DEFAULT_PROMPT;
+    }
+
+    static boolean isLegacyTranscribePrompt(String prompt) {
+        return prompt != null && LEGACY_TRANSCRIBE_PROMPT.equalsIgnoreCase(prompt.trim());
+    }
+
+    private static boolean hasCompleteSchema(String prompt) {
+        return prompt.contains("manufacturer_part_number")
+                && prompt.contains("lcsc_part_number")
+                && prompt.contains("category")
+                && prompt.contains("specification")
+                && prompt.contains("package")
+                && prompt.contains("brand")
+                && prompt.contains("parameters");
     }
 
     private static String knownValue(String value, String[] values, String fallback) {

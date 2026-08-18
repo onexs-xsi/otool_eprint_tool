@@ -12,6 +12,10 @@ public final class VlmSettingsStore {
     public static VlmSettings load(Context context) {
         VlmSettings defaults = VlmSettings.defaults();
         SharedPreferences values = context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE);
+        String storedPrompt = values.getString("prompt", defaults.prompt);
+        // “全文转写”遗留参数的高惩罚会破坏重复 JSON 标点；迁移到信息提取时只重置
+        // 采样惩罚，线程/后端/精度/超时等用户配置继续保留。
+        boolean migratingTranscribe = VlmSettings.isLegacyTranscribePrompt(storedPrompt);
         return new VlmSettings(
                 values.getString("backend", defaults.backend),
                 values.getInt("thread_count", defaults.threadCount),
@@ -19,10 +23,13 @@ public final class VlmSettingsStore {
                 values.getString("memory", defaults.memory),
                 values.getInt("max_new_tokens", defaults.maxNewTokens),
                 values.getInt("timeout_seconds", defaults.timeoutSeconds),
-                values.getFloat("repetition_penalty", defaults.repetitionPenalty),
-                values.getFloat("presence_penalty", defaults.presencePenalty),
-                values.getFloat("frequency_penalty", defaults.frequencyPenalty),
-                values.getString("prompt", defaults.prompt));
+                migratingTranscribe ? defaults.repetitionPenalty
+                        : values.getFloat("repetition_penalty", defaults.repetitionPenalty),
+                migratingTranscribe ? defaults.presencePenalty
+                        : values.getFloat("presence_penalty", defaults.presencePenalty),
+                migratingTranscribe ? defaults.frequencyPenalty
+                        : values.getFloat("frequency_penalty", defaults.frequencyPenalty),
+                storedPrompt);
     }
 
     public static void save(Context context, VlmSettings settings) {

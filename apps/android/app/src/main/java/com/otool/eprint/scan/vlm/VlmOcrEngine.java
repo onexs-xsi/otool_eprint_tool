@@ -29,8 +29,8 @@ public final class VlmOcrEngine {
     static final int DEGENERATE_RUN_LIMIT = 48;
 
     public static final String MODEL_DIR_NAME = "glm-ocr-mnn";
-    /** 全文转写触发词（GLM-OCR 官方 SDK 默认值）。 */
-    public static final String TRANSCRIBE_PROMPT = VlmSettings.DEFAULT_PROMPT;
+    /** GLM-OCR 官方“信息提取”场景使用的完整严格 JSON 提示词。 */
+    public static final String INFORMATION_EXTRACTION_PROMPT = VlmSettings.DEFAULT_PROMPT;
 
     /** 加载必需文件（缺一则视为未部署）。 */
     private static final String[] REQUIRED_FILES = {
@@ -60,12 +60,12 @@ public final class VlmOcrEngine {
         return null;
     }
 
-    /** 组全文转写 prompt：图片以 <img>绝对路径</img> 内嵌。纯 JVM，可单测。 */
-    public static String buildTranscribePrompt(File imageFile) {
-        return buildTranscribePrompt(imageFile, TRANSCRIBE_PROMPT);
+    /** 组信息提取 prompt：图片以 <img>绝对路径</img> 内嵌。纯 JVM，可单测。 */
+    public static String buildInformationExtractionPrompt(File imageFile) {
+        return buildInformationExtractionPrompt(imageFile, INFORMATION_EXTRACTION_PROMPT);
     }
 
-    public static String buildTranscribePrompt(File imageFile, String prompt) {
+    public static String buildInformationExtractionPrompt(File imageFile, String prompt) {
         return "<img>" + imageFile.getAbsolutePath() + "</img>" + prompt;
     }
 
@@ -154,7 +154,7 @@ public final class VlmOcrEngine {
                     System.currentTimeMillis() - start);
         }
         stopRequested = false;
-        String prompt = buildTranscribePrompt(imageFile, settings.prompt);
+        String prompt = buildInformationExtractionPrompt(imageFile, settings.prompt);
         Log.i(TAG, "submit prompt: " + prompt);
         StringBuilder observed = new StringBuilder();
         boolean[] degenerate = {false};

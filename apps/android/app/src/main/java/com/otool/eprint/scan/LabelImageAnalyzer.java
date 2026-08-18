@@ -43,6 +43,9 @@ public final class LabelImageAnalyzer {
         /** 旋正坐标系下的外接矩形宽高（以质心为中心）。 */
         public int rotatedWidth;
         public int rotatedHeight;
+        /** 胜出连通区每一行的左右边界（分析图坐标），用于精确清除标签外区域。 */
+        public int[] rowLeft;
+        public int[] rowRight;
     }
 
     private LabelImageAnalyzer() {}
@@ -58,6 +61,75 @@ public final class LabelImageAnalyzer {
             gray[index] = (r * 299 + g * 587 + b * 114) / 1000;
         }
         return new GrayImage(width, height, gray);
+    }
+
+    /**
+     * 彩色画面转“纸张候选”二值图：保留中高亮、RGB 色差较小的中性纸面，排除木纹、
+     * 彩色包装和黑色显示器。纸面上的黑字形成孔洞，不影响背景连通区定位。
+     */
+    public static GrayImage toPaperMask(int[] argb, int width, int height) {
+        int[] mask = new int[width * height];
+        for (int index = 0; index < mask.length; index++) {
+            int color = argb[index];
+            int r = (color >> 16) & 0xFF;
+            int g = (color >> 8) & 0xFF;
+            int b = color & 0xFF;
+            int maximum = Math.max(r, Math.max(g, b));
+            int minimum = Math.min(r, Math.min(g, b));
+            int luminance = (r * 299 + g * 587 + b * 114) / 1000;
+            // 高亮处允许轻微色温偏移，较暗区域则收紧色差，避免棕色纸袋/木纹
+            // 与白色标签连成同一候选区。
+            int allowedChroma = Math.max(22, luminance * 18 / 100);
+            mask[index] = luminance >= 120 && maximum - minimum <= allowedChroma ? 255 : 0;
+        }
+        return new GrayImage(width, height, mask);
+    }
+
+    /**
+     * 二值开运算（先腐蚀后膨胀），用于断开塑料反光、线缆等细长高亮物与标签纸的连接。
+     * 输入输出仍为 0/255，半径 0 时原样返回。
+     */
+    public static GrayImage openBinaryMask(GrayImage source, int radius) {
+        if (radius <= 0) return source;
+        int width = source.width;
+        int height = source.height;
+        int[] eroded = new int[width * height];
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                boolean keep = true;
+                for (int dy = -radius; dy <= radius && keep; dy++) {
+                    for (int dx = -radius; dx <= radius; dx++) {
+                        int nx = x + dx;
+                        int ny = y + dy;
+                        if (nx < 0 || ny < 0 || nx >= width || ny >= height
+                                || source.pixels[ny * width + nx] == 0) {
+                            keep = false;
+                            break;
+                        }
+                    }
+                }
+                eroded[y * width + x] = keep ? 255 : 0;
+            }
+        }
+        int[] opened = new int[width * height];
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                boolean fill = false;
+                for (int dy = -radius; dy <= radius && !fill; dy++) {
+                    for (int dx = -radius; dx <= radius; dx++) {
+                        int nx = x + dx;
+                        int ny = y + dy;
+                        if (nx >= 0 && ny >= 0 && nx < width && ny < height
+                                && eroded[ny * width + nx] != 0) {
+                            fill = true;
+                            break;
+                        }
+                    }
+                }
+                opened[y * width + x] = fill ? 255 : 0;
+            }
+        }
+        return new GrayImage(width, height, opened);
     }
 
     /** 限宽降采样（盒式平均），宽度不超过 maxWidth 时原样返回。 */
@@ -135,6 +207,7 @@ public final class LabelImageAnalyzer {
         int bestTop = 0;
         int bestRight = 0;
         int bestBottom = 0;
+        int bestSeed = -1;
         for (int start = 0; start < width * height; start++) {
             if (visited[start] || image.pixels[start] <= threshold) continue;
             visited[start] = true;
@@ -170,6 +243,7 @@ public final class LabelImageAnalyzer {
             }
             if (size > bestSize) {
                 bestSize = size;
+                bestSeed = start;
                 bestSumX = sumX;
                 bestSumY = sumY;
                 bestSumXX = sumXX;
@@ -212,21 +286,38 @@ public final class LabelImageAnalyzer {
         double maxU = -Double.MAX_VALUE;
         double minV = Double.MAX_VALUE;
         double maxV = -Double.MAX_VALUE;
-        for (int y = 0; y < height; y++) {
-            for (int x = 0; x < width; x++) {
-                if (image.pixels[y * width + x] <= threshold) continue;
-                double dx = x - centroidX;
-                double dy = y - centroidY;
-                double u = dx * cos + dy * sin;
-                double v = -dx * sin + dy * cos;
-                if (u < minU) minU = u;
-                if (u > maxU) maxU = u;
-                if (v < minV) minV = v;
-                if (v > maxV) maxV = v;
-            }
+        // 只重扫胜出的连通区；若把其他亮区也计入，会把旋正裁剪尺寸错误扩大到整幅画面。
+        boolean[] selected = new boolean[width * height];
+        int[] rowLeft = new int[height];
+        int[] rowRight = new int[height];
+        java.util.Arrays.fill(rowLeft, width);
+        java.util.Arrays.fill(rowRight, -1);
+        stack.clear();
+        selected[bestSeed] = true;
+        stack.push(bestSeed);
+        while (!stack.isEmpty()) {
+            int current = stack.pop();
+            int x = current % width;
+            int y = current / width;
+            double dx = x - centroidX;
+            double dy = y - centroidY;
+            double u = dx * cos + dy * sin;
+            double v = -dx * sin + dy * cos;
+            if (x < rowLeft[y]) rowLeft[y] = x;
+            if (x > rowRight[y]) rowRight[y] = x;
+            if (u < minU) minU = u;
+            if (u > maxU) maxU = u;
+            if (v < minV) minV = v;
+            if (v > maxV) maxV = v;
+            pushNeighbor(image, selected, stack, threshold, x - 1, y);
+            pushNeighbor(image, selected, stack, threshold, x + 1, y);
+            pushNeighbor(image, selected, stack, threshold, x, y - 1);
+            pushNeighbor(image, selected, stack, threshold, x, y + 1);
         }
         result.rotatedWidth = Math.max(1, (int) Math.ceil(maxU - minU));
         result.rotatedHeight = Math.max(1, (int) Math.ceil(maxV - minV));
+        result.rowLeft = rowLeft;
+        result.rowRight = rowRight;
         return result;
     }
 

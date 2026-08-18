@@ -1,6 +1,6 @@
 # ocr_plan_0818-planb — 路线 B 定案：端侧文档 VLM 主链路（手写便签 + 文本→预设位置自动匹配）
 
-日期：2026-08-19 · 当前交付：v1.5.15 / versionCode 21 · 后续目标：v1.6.0
+日期：2026-08-19 · 当前交付：v1.5.17 / versionCode 23 · 后续目标：v1.6.0
 
 > **状态：实施中（2026-08-19 启动，见 §0 进度日志）。** 本文是 `docs/ocr_plan_0818.md` 的**路线 B 深化定案**，取代其 §3.2 的双路线并立结构：**VLM 端到端链路升格为唯一主链路**，PP-OCRv6 级联降级为常驻几何/校验通道。
 > **用户决策（2026-08-19）**：
@@ -33,6 +33,8 @@
 | 2026-08-19 | 阶段 2b 中间检查：子代理的 `glm_ocr_jni.cpp`（薄 JNI：load/submit 流式/reset/release/maxNewTokens/updateConfig + prefill/generate 步进 workaround + LlmContext 性能计数器回传）经 NDK clang++ `-fsyntax-only --target=aarch64-linux-android24` 独立验证**零告警通过**；Java 封装（GlmOcrSession/VlmOcrEngine/VlmResult）审查通过（native 可用性守卫、模型目录必需文件校验、MAX_NEW_TOKENS 防退化死循环） | ✅ |
 | 2026-08-19 | 阶段 2b 完成：MNN NDK 薄 JNI 改用标准 `Llm::response` 生成路径；SM-X800 复现电子料标签单 token `333…` 退化，独立原生 harness 证明同模型可正常识别官方手写样本、故障随图片内容触发。最终以确定性 penalty 采样（重复/出现/频率惩罚 1.6/0.8/0.4）修复：同一实拍标签由跑满 256/1024 token 降为 113 token 正常结束，识别出 `3417-B-D06-004`、`QTY:100个`、`C45359894` 等主体，应用内总耗时约 8.6s；另加连续 48 字符退化中止并明确报错，**不自动回退**。标题改“识别解析”，新增“模型配置”并验证进程重启后持久化 | ✅ |
 | 2026-08-19 | 阶段 2a 完成：onnxruntime-android 1.22.0 + PP-OCRv6 det→cls→rec 级联入库（`scan/ocr/` 纯 Java；DB 后处理凸包+旋转卡壳+unclip、CTC greedy 纯 JVM 可测），det_small/rec_small/cls/字典入 `assets/ocr/`（noCompress，abiFilters arm64-v8a，APK ~55MB）；benchmark 埋点随 OcrResult 返回。MainActivity 接线：切入标签档后台预热、识别期按钮转加载态、结果（原文+解析字段+分阶段耗时）展示在扫码原文/本机解析区，不写画布（2c 再确认）。SM-X800 实测 det 316~482ms / cls 70~76ms / rec ~1.8s（16~17 行）/ 共 ~2.4s；立创样品字段全中（料号 C45359894、型号 CGA0402C0G120J500GT、数量 100、订单 SO26063011291、批次 0630-0057，置信度 100%）。130 项单测全绿（新增 CtcDecoder/DbPostProcessor 13 项）。坑：cls 静态输入 80×160（与上行桌面验证结论一致，初版按 48×192 写导致整批行被丢弃；cls 失败已改为降级不丢行）。截图存 `.tools/verification/ocr-stage2a-*.png` | ✅ |
+| 2026-08-19 | v1.5.16 器件模板重构：按 MLCC 与 RGB LED 实物样品补齐英文品类、SMD 封装和厂商解析，并将标签 OCR 记录接入模板/画布；三档标签均移除数量、订单、批次、追踪号及内部仓储码，简洁档仅型号/品类/规格/封装且不含立创料号，标准和完整档保留立创料号；“显示追溯行”改为可持久化的“显示品牌 / 厂商” | ✅ |
+| 2026-08-19 | v1.5.17 GLM-OCR 改用官方“信息提取”思路：固定完整七键 JSON schema（型号/立创料号/品类/规格/封装/品牌/扩展参数），旧全文转写提示词自动迁移，自定义提示词不能移除 schema；同一次 VLM 输出形成统一 ComponentRecord，模板在全部模型完成后生成且冲突字段默认由 GLM 优先。模型配置覆盖标签/二维码/条形码并持久化，支持直接重启应用；普通页仅保留二维码/条形码，器件整理页默认标签。识别底栏只显示分类后的最终完整结果，过程日志统一迁至右侧。三档模板采用固定前缀并允许逐类启停字段。码区遮盖因实拍误伤风险改为默认关闭的实验功能；标签外区域按纸张连通区清理 | ✅ |
 | — | 阶段 2c：LabelSceneFusion + SlotMatcher + 确认 UI | ⏳ |
 | 2026-08-19 | **桌面先行暴露风险及真机闭环**：pymnn 3.6.1 (Windows x86) 跑 GLM-OCR-MNN，纯文本正常但视觉路径输出「3333…」；ARM 真机在特定电子料标签上同样复现。排除 Java/JNI、图片编码、后端与精度后，确认原模型 greedy penalty=1.1 会陷入采样循环；v1.5.15 用确定性抗重复采样修复并加退化中止。开发阶段不做 PP-OCR 自动替代，两个通道独立展示 | ✅ |
 

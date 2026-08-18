@@ -38,17 +38,21 @@ public final class ComponentRecord {
         StringBuilder value = new StringBuilder()
                 .append("供应商：").append(supplier.label)
                 .append(" · 识别置信度 ").append(confidence).append('%');
-        append(value, "订单", orderNumber);
         append(value, "立创料号", supplierPartNumber);
         append(value, "型号", manufacturerPartNumber);
-        if (quantity > 0) value.append("\n数量：").append(quantity);
-        append(value, "追踪号", trackingId);
+        append(value, "品类", fields.get("品类"));
+        append(value, "规格", fields.get("规格"));
+        append(value, "封装", fields.get("封装"));
+        append(value, "品牌", fields.get("厂商"));
+        append(value, "参数", fields.get("参数"));
         if (!warning.isEmpty()) value.append("\n提示：").append(warning);
         return value.toString();
     }
 
     private static void append(StringBuilder target, String label, String value) {
-        if (!value.isEmpty()) target.append('\n').append(label).append("：").append(value);
+        if (value != null && !value.isEmpty()) {
+            target.append('\n').append(label).append("：").append(value);
+        }
     }
 
     private static String clean(String value) {

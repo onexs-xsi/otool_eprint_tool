@@ -31,4 +31,27 @@ public final class ScanFormatCatalogTest {
         assertTrue(ScanFormatCatalog.formats(ScanInputMode.LABEL).isEmpty());
         assertTrue(ScanFormatCatalog.formatNames(ScanInputMode.LABEL).isEmpty());
     }
+
+    @Test
+    public void configuredPagesExposeOnlySelectedFormatGroups() {
+        RecognitionSettings d = RecognitionSettings.defaults();
+        RecognitionSettings settings = new RecognitionSettings(
+                d.labelEnabled, d.ppOcrEnabled, d.vlmEnabled, d.cropToLabel,
+                d.maskCodesBeforeVlm, d.experimentalWeakCodeMask,
+                d.showProcessingPreview, d.preferGlmOnConflict,
+                d.minimumLabelCoveragePercent, d.blurVarianceThreshold,
+                d.qrEnabled, d.qrContinuous, d.qrTryHarder, d.qrAlsoInverted,
+                true, d.qrSuppressDuplicates,
+                d.barcodeEnabled, d.barcodeContinuous, d.barcodeTryHarder,
+                d.barcodeAlsoInverted, false, true, false,
+                d.barcodeSuppressDuplicates);
+        assertTrue(ScanFormatCatalog.formats(ScanInputMode.QR, settings)
+                .contains(BarcodeFormat.DATA_MATRIX));
+        assertTrue(ScanFormatCatalog.formats(ScanInputMode.BARCODE, settings)
+                .contains(BarcodeFormat.CODE_128));
+        assertFalse(ScanFormatCatalog.formats(ScanInputMode.BARCODE, settings)
+                .contains(BarcodeFormat.EAN_13));
+        assertFalse(ScanFormatCatalog.formats(ScanInputMode.BARCODE, settings)
+                .contains(BarcodeFormat.ITF));
+    }
 }

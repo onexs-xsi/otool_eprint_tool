@@ -13,10 +13,11 @@ public final class VlmSettingsTest {
         assertEquals(4, settings.threadCount);
         assertEquals(1024, settings.maxNewTokens);
         assertEquals(60_000L, settings.timeoutMs());
-        assertEquals(1.6f, settings.repetitionPenalty, 0.001f);
-        assertEquals(0.8f, settings.presencePenalty, 0.001f);
-        assertEquals(0.4f, settings.frequencyPenalty, 0.001f);
-        assertEquals("Text Recognition:", settings.prompt);
+        assertEquals(1.1f, settings.repetitionPenalty, 0.001f);
+        assertEquals(0.0f, settings.presencePenalty, 0.001f);
+        assertEquals(0.0f, settings.frequencyPenalty, 0.001f);
+        assertTrue(settings.prompt.contains("manufacturer_part_number"));
+        assertTrue(settings.prompt.contains("parameters"));
     }
 
     @Test
@@ -52,5 +53,15 @@ public final class VlmSettingsTest {
         assertTrue(json.contains("\"frequency_penalty\":0.5"));
         assertTrue(json.contains("\"penalty_sampler\":\"greedy\""));
         assertTrue(json.contains("\"async\":false"));
+    }
+
+    @Test
+    public void legacyAndCustomPromptsCannotRemoveCompleteExtractionSchema() {
+        assertEquals(VlmSettings.DEFAULT_PROMPT,
+                VlmSettings.completeExtractionPrompt("Text Recognition:"));
+        String customized = VlmSettings.completeExtractionPrompt("优先读取左侧文字");
+        assertTrue(customized.startsWith("优先读取左侧文字"));
+        assertTrue(customized.contains("manufacturer_part_number"));
+        assertTrue(customized.contains("parameters"));
     }
 }

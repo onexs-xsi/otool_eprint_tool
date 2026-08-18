@@ -77,6 +77,23 @@ public final class LabelImageAnalyzerTest {
     }
 
     @Test
+    public void rotatedBoundsIgnoreOtherDisconnectedBrightObjects() {
+        LabelImageAnalyzer.GrayImage img = image(100, 60, 20);
+        for (int y = 20; y < 40; y++) {
+            for (int x = 25; x < 75; x++) img.pixels[y * 100 + x] = 240;
+        }
+        // 独立噪点远离主标签，不应扩大旋正后的标签尺寸。
+        for (int y = 2; y < 7; y++) {
+            for (int x = 90; x < 97; x++) img.pixels[y * 100 + x] = 240;
+        }
+        LabelImageAnalyzer.LabelRegion region =
+                LabelImageAnalyzer.findLargestBrightRegion(img, 100);
+        assertTrue(region.found);
+        assertTrue(region.rotatedWidth <= 51);
+        assertTrue(region.rotatedHeight <= 21);
+    }
+
+    @Test
     public void darkImageHasNoBrightRegion() {
         LabelImageAnalyzer.GrayImage img = image(20, 20, 30);
         int threshold = LabelImageAnalyzer.otsuThreshold(img);
@@ -95,6 +112,39 @@ public final class LabelImageAnalyzerTest {
         assertEquals(123, small.pixels[0]);
         // 不超限时原样返回。
         assertEquals(small, LabelImageAnalyzer.downscale(small, 320));
+    }
+
+    @Test
+    public void paperMaskKeepsNeutralPaperAndRejectsColoredBackground() {
+        int[] argb = {
+                0xFFF0F0EE, // 暖白标签纸
+                0xFFC09050, // 木纹/棕色桌面
+                0xFF1C1C1C, // 黑色显示器边框
+                0xFFAFA8A5, // 略偏暖但仍接近中性的纸面阴影
+                0xFFAD957F  // 偏暗的近中性色包装纸，仍应排除
+        };
+        LabelImageAnalyzer.GrayImage mask = LabelImageAnalyzer.toPaperMask(argb, 5, 1);
+        assertEquals(255, mask.at(0, 0));
+        assertEquals(0, mask.at(1, 0));
+        assertEquals(0, mask.at(2, 0));
+        assertEquals(255, mask.at(3, 0));
+        assertEquals(0, mask.at(4, 0));
+    }
+
+    @Test
+    public void binaryOpeningRemovesThinBridgeBetweenBrightObjects() {
+        LabelImageAnalyzer.GrayImage mask = image(32, 20, 0);
+        for (int y = 4; y < 16; y++) {
+            for (int x = 2; x < 13; x++) mask.pixels[y * 32 + x] = 255;
+            for (int x = 21; x < 29; x++) mask.pixels[y * 32 + x] = 255;
+        }
+        for (int x = 13; x < 21; x++) mask.pixels[10 * 32 + x] = 255;
+        LabelImageAnalyzer.GrayImage opened = LabelImageAnalyzer.openBinaryMask(mask, 1);
+        assertEquals(0, opened.at(16, 10));
+        LabelImageAnalyzer.LabelRegion region =
+                LabelImageAnalyzer.findLargestBrightRegion(opened, 127);
+        assertTrue(region.found);
+        assertTrue(region.right <= 14);
     }
 
     @Test

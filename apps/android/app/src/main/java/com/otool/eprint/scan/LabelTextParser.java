@@ -31,6 +31,11 @@ public final class LabelTextParser {
     private static final Pattern TOLERANCE = Pattern.compile("[±土]\\s*\\d+(\\.\\d+)?\\s*%");
     private static final Pattern PACKAGE_CODE = Pattern.compile(
             "\\b(0[2346]0[23]|0805|1206|1210|2512)\\b|\\bSMD[-\\s]?\\d{4}\\b");
+    private static final Pattern CATEGORY_HINT = Pattern.compile(
+            "\\b(RGB\\s*LED|LED|MLCC|RESISTOR|CAPACITOR|DIODE|TRANSISTOR|MOSFET|IC|CONNECTOR)\\b",
+            Pattern.CASE_INSENSITIVE);
+    private static final Pattern CHINESE_CATEGORY_HINT = Pattern.compile(
+            "贴片电容|电容|电阻|发光二极管|二极管|三极管|MOS管|连接器|芯片|继电器|电感|晶振|灯珠");
     private static final Pattern HAS_CHINESE = Pattern.compile("[\\u4e00-\\u9fff]");
     private static final Pattern HAS_LETTER = Pattern.compile("[A-Za-z]");
     private static final Pattern HAS_DIGIT = Pattern.compile("\\d");
@@ -92,7 +97,7 @@ public final class LabelTextParser {
                 // 以 ASCII 字母开头的是厂商（HRE(芯声)），中文开头的是品类（贴片电容(MLCC)）。
                 if (Character.isLetter(line.charAt(0)) && line.charAt(0) < 0x80) {
                     if (vendor.isEmpty()) vendor = line;
-                } else if (category.isEmpty()) {
+                } else if (category.isEmpty() && CHINESE_CATEGORY_HINT.matcher(line).find()) {
                     category = line;
                 }
                 continue;
@@ -104,8 +109,16 @@ public final class LabelTextParser {
                 continue;
             }
             Matcher pkg = PACKAGE_CODE.matcher(line);
-            if (pkg.find() && !HAS_LETTER_AND_DIGIT(line)) {
+            if (pkg.find()) {
                 if (packageCode.isEmpty()) packageCode = pkg.group();
+                String packageOnly = pkg.group().replace("-", "").replace(" ", "");
+                String lineWithoutSeparators = line.replace("-", "").replace(" ", "");
+                if (lineWithoutSeparators.equalsIgnoreCase(packageOnly)) continue;
+            }
+            // 英文品类行（例如样品上的 "RGB LED(...)"）不含中文，需在型号候选前识别。
+            if (category.isEmpty() && !HAS_DIGIT.matcher(line).find()
+                    && CATEGORY_HINT.matcher(line).find()) {
+                category = line;
                 continue;
             }
             // 型号候选：排除上述模式后最长的字母数字混合行。
@@ -125,17 +138,17 @@ public final class LabelTextParser {
         if (!lotNumber.isEmpty()) fields.put("批次号", lotNumber);
 
         int score = 0;
-        if (!supplierPart.isEmpty()) score += 35;
-        if (!model.isEmpty()) score += 25;
-        if (quantity > 0) score += 20;
-        if (!internalCode.isEmpty()) score += 10;
+        if (!supplierPart.isEmpty()) score += 40;
+        if (!model.isEmpty()) score += 40;
         if (!spec.isEmpty()) score += 5;
+        if (!packageCode.isEmpty()) score += 5;
         if (!vendor.isEmpty()) score += 5;
+        if (!category.isEmpty()) score += 5;
         score = Math.min(100, score);
 
         SupplierFormat supplier = supplierPart.isEmpty() ? SupplierFormat.AUTO : SupplierFormat.LCSC;
-        boolean recognized = !supplierPart.isEmpty() && !model.isEmpty() && quantity > 0;
-        String warning = buildWarning(supplierPart, model, quantity, raw.length() > 0);
+        boolean recognized = !supplierPart.isEmpty() && !model.isEmpty();
+        String warning = buildWarning(supplierPart, model, raw.length() > 0);
         // SO 流水号即立创订单号（与二维码 payload 的 on 字段对齐），批次号作追溯号。
         return new ComponentRecord(supplier, recognized, score, soNumber, supplierPart,
                 model, quantity, lotNumber, raw.toString(), fields, warning);
@@ -168,7 +181,8 @@ public final class LabelTextParser {
             for (int other = 0; other < lines.size(); other++) {
                 if (other == index || consumed[other]) continue;
                 OcrLine candidate = lines.get(other);
-                if (!isResidual(candidate) || !sameBand(line, candidate)) continue;
+                if (!isResidual(candidate) || !sameBand(line, candidate)
+                        || !isMergeableResidual(line, candidate)) continue;
                 consumed[other] = true;
                 if (candidate.left < line.left) merged.insert(0, candidate.text);
                 else merged.append(candidate.text);
@@ -189,8 +203,9 @@ public final class LabelTextParser {
         return Math.abs(line.centerY() - other.centerY()) <= tolerance && gap <= maxGap;
     }
 
-    private static boolean HAS_LETTER_AND_DIGIT(String line) {
-        return HAS_LETTER.matcher(line).find() && HAS_DIGIT.matcher(line).find();
+    /** 当前样品中可信的残行拼接仅是 QTY 末尾数字；孤立汉字/字母不得污染品类或型号。 */
+    private static boolean isMergeableResidual(OcrLine host, OcrLine residual) {
+        return QTY.matcher(host.text).find() && residual.text.trim().matches("\\d{1,2}");
     }
 
     /** 常见误识映射：土→±；数字之间的 O/o→0、l/I→1。 */
@@ -209,12 +224,11 @@ public final class LabelTextParser {
         return out.toString();
     }
 
-    private static String buildWarning(String part, String model, int quantity, boolean hasText) {
+    private static String buildWarning(String part, String model, boolean hasText) {
         if (!hasText) return "未识别到有效字段，请对准标签重拍";
         StringBuilder missing = new StringBuilder();
         if (part.isEmpty()) missing.append("料号 ");
         if (model.isEmpty()) missing.append("型号 ");
-        if (quantity <= 0) missing.append("数量");
         return missing.length() == 0 ? ""
                 : "缺少" + missing.toString().trim() + "，打印前请人工核对";
     }

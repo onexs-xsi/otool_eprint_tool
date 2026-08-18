@@ -22,18 +22,24 @@ public final class LabelTextParserTest {
         return Arrays.asList(
                 new OcrLine("0250-A-E18-001", 0.98f, 40, 20, 320, 50),
                 new OcrLine("XL-5050RGBC-WS2812B", 0.97f, 40, 60, 420, 90),
-                new OcrLine("QTY:20", 0.99f, 40, 100, 200, 130),
-                new OcrLine("C2843785", 0.99f, 40, 140, 240, 170),
-                new OcrLine("SO25011518496", 0.98f, 40, 180, 320, 210),
-                new OcrLine("0115-0081", 0.96f, 340, 180, 500, 210));
+                new OcrLine("SMD5050", 0.98f, 40, 100, 180, 130),
+                new OcrLine("RGB LED(...) ", 0.96f, 320, 100, 500, 130),
+                new OcrLine("XINGLIGHT(成兴光)", 0.96f, 40, 140, 300, 170),
+                new OcrLine("QTY:20", 0.99f, 40, 180, 200, 210),
+                new OcrLine("C2843785", 0.99f, 40, 220, 240, 250),
+                new OcrLine("SO25011518496", 0.98f, 40, 260, 320, 290),
+                new OcrLine("0115-0081", 0.96f, 340, 260, 500, 290));
     }
 
     /** 样品二：贴片电容标签（3417-B-D06-004 / C45359894 / CGA0402C0G120J500GT）。 */
     private static List<OcrLine> sampleMlcc() {
         return Arrays.asList(
                 new OcrLine("3417-B-D06-004", 0.98f, 40, 20, 320, 50),
+                new OcrLine("自然无香", 0.70f, 350, 20, 470, 50),
                 new OcrLine("HRE(芯声)", 0.95f, 40, 60, 260, 90),
                 new OcrLine("贴片电容(MLCC)", 0.95f, 40, 100, 320, 130),
+                // 二维码边缘可能误产出同带孤立汉字，不能拼进品类。
+                new OcrLine("盛", 0.55f, 325, 102, 345, 128),
                 new OcrLine("CGA0402C0G120J500GT", 0.97f, 40, 140, 440, 170),
                 new OcrLine("12pF ±5% 50V", 0.94f, 40, 180, 300, 210),
                 new OcrLine("0402", 0.99f, 40, 220, 140, 250),
@@ -58,6 +64,9 @@ public final class LabelTextParserTest {
         assertEquals("SO25011518496", record.orderNumber);
         assertEquals("0115-0081", record.trackingId);
         assertEquals("0250-A-E18-001", record.fields.get("内部编码"));
+        assertEquals("SMD5050", record.fields.get("封装"));
+        assertEquals("RGB LED(...) ".trim(), record.fields.get("品类"));
+        assertEquals("XINGLIGHT(成兴光)", record.fields.get("厂商"));
         assertTrue(record.warning.isEmpty());
         assertTrue(record.confidence >= 70);
     }
@@ -78,8 +87,13 @@ public final class LabelTextParserTest {
         assertEquals("0402", record.fields.get("封装"));
         assertEquals("HRE(芯声)", record.fields.get("厂商"));
         assertEquals("贴片电容(MLCC)", record.fields.get("品类"));
+        assertTrue(record.summary().contains("规格：12pF ±5% 50V"));
+        assertFalse(record.summary().contains("数量"));
+        assertFalse(record.summary().contains("SO26063011291"));
+        assertFalse(record.summary().contains("0630-0057"));
         // "B" 孤行被丢弃，不污染任何字段。
         assertFalse(record.fields.containsValue("B"));
+        assertFalse(record.fields.containsValue("自然无香"));
     }
 
     @Test
@@ -117,6 +131,15 @@ public final class LabelTextParserTest {
         assertFalse(record.recognized);
         assertEquals("C45359894", record.supplierPartNumber);
         assertTrue(record.warning.contains("型号"));
-        assertTrue(record.warning.contains("数量"));
+        assertFalse(record.warning.contains("数量"));
+    }
+
+    @Test
+    public void quantityIsNotRequiredForAUsableComponentRecord() {
+        ComponentRecord record = LabelTextParser.parse(Arrays.asList(
+                new OcrLine("C45359894", 0.99f, 40, 100, 250, 130),
+                new OcrLine("CGA0402C0G120J500GT", 0.98f, 40, 140, 440, 170)));
+        assertTrue(record.recognized);
+        assertTrue(record.warning.isEmpty());
     }
 }
