@@ -13,6 +13,7 @@
 **/node_modules/
 **/dist/
 **/.gradle/
+**/.cxx/
 **/build/
 **/local.properties
 *.log

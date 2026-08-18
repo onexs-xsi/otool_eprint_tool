@@ -177,6 +177,38 @@
             android:layout_marginStart="16dp"
             android:layout_marginTop="16dp"
             android:layout_marginEnd="16dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="识别解析"
+                android:textColor="@color/eprint_text"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <Button
+                android:id="@+id/modelConfigButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/button_secondary"
+                android:minHeight="0dp"
+                android:minWidth="0dp"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp"
+                android:text="模型配置"
+                android:textAllCaps="false"
+                android:textColor="@color/eprint_text" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="16dp"
+            android:layout_marginTop="8dp"
+            android:layout_marginEnd="16dp"
             android:orientation="horizontal">
 
             <Button
@@ -198,7 +230,7 @@
                 android:layout_height="48dp"
                 android:layout_marginStart="6dp"
                 android:layout_marginEnd="6dp"
-                android:layout_weight="1.4"
+                android:layout_weight="1.6"
                 android:importantForAccessibility="yes" />
 
             <Button

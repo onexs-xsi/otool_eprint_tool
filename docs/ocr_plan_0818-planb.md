@@ -1,15 +1,40 @@
 # ocr_plan_0818-planb — 路线 B 定案：端侧文档 VLM 主链路（手写便签 + 文本→预设位置自动匹配）
 
-日期：2026-08-19 · 现状基线：v1.5.14 / versionCode 20 · 建议目标版本：v1.5.15 ~ v1.6.0
+日期：2026-08-19 · 当前交付：v1.5.15 / versionCode 21 · 后续目标：v1.6.0
 
-> **状态：方案设计（未实施）。** 本文是 `docs/ocr_plan_0818.md` 的**路线 B 深化定案**，取代其 §3.2 的双路线并立结构：**VLM 端到端链路升格为唯一主链路**，PP-OCRv6 级联降级为常驻几何/校验通道。
+> **状态：实施中（2026-08-19 启动，见 §0 进度日志）。** 本文是 `docs/ocr_plan_0818.md` 的**路线 B 深化定案**，取代其 §3.2 的双路线并立结构：**VLM 端到端链路升格为唯一主链路**，PP-OCRv6 级联降级为常驻几何/校验通道。
 > **用户决策（2026-08-19）**：
 > 1. 选定路线 B（端侧文档 VLM）为主路线；
 > 2. 后期需支持**手写便签识别**；
 > 3. 后期需支持**识别文本自动匹配到模板预设位置**，要求尽可能提高冗余度与智能程度；
 > 4. **模型允许打包进 APK，APK 体积不作要求**（取代 ocr_plan_0818.md 的「模型外置导入」方案）。
+> 5. 当前开发阶段不启用 OCR 通道自动回退；PP-OCRv6 与 GLM-OCR 结果独立展示，失败需明确暴露。
 >
 > 技术格局核实时间：2026-08-19（联网核实，逐项备注发布时间）。未变更的通用部分（取帧、标签定位、模式开关、打印链路）仍以 `ocr_plan_0818.md` 为准，本文不重复。
+
+## 0. 实施进度日志
+
+> 每次推进后更新本节；完成标准以 §5/§6 的验证计划为准。
+
+| 日期 | 事项 | 状态 |
+| --- | --- | --- |
+| 2026-08-19 | 构建环境打通：`.tools/` 自带 JDK 21 + Android SDK + gradle 8.14.3，`gradlew` 验证可用；SM-X800（Android 14）经 adb 网络连接在线，已装现版 App | ✅ |
+| 2026-08-19 | 模型下载并校验：PP-OCRv6 det/rec small+tiny、PP-OCRv5 cls、字典（ONNX，RapidOCR 官方 v3.9.2 模型库）；GLM-OCR-MNN 官方 4bit 全套（llm/visual/embeddings/tokenizer，~1GB）；MNN 3.6.1 Android 预编译包（含 `libllm.so`）。SHA-256 与官方清单逐一核对一致。暂存 `.tools/downloads/ocr-models/`、`.tools/downloads/mnn_android.zip`，未入库 | ✅ |
+| 2026-08-19 | NDK 工具链就绪：`cmdline-tools` 为截断坏包无 sdkmanager，改从 dl.google.com 直链下载 **NDK r27d（27.3.13750724，匹配 AGP 8.13 默认）+ CMake 3.22.1**，已解压至 `.tools/android-sdk/ndk/` 与 `cmake/` 标准布局，AGP 可自动识别 | ✅ |
+| 2026-08-19 | 阶段 2 物料备齐：MNN 3.6.1 编译头文件（`.tools/downloads/mnn-3.6.1-include/`，含 `llm.hpp` 与 nlohmann/json.hpp）、官方 JNI 层裁剪源码与 `LlmSession.kt`（`.tools/downloads/mnn-llm-src/`，已统一为 3.6.1 标签）；GLM-OCR prompt 约定核实（全文转写触发词 `Text Recognition:`，图片以 `<img>路径</img>` 嵌入 prompt） | ✅ |
+| 2026-08-19 | 阶段 1（无模型依赖基础链路）完成：ScanInputMode 三档开关、MainActivity 拍摄识别接线、LabelGuideOverlay 引导框、LabelFrameProcessor（Otsu/轮廓自校正/糊片检测）、LabelTextParser + OcrLine。**构建通过、117 项单测全绿（独立复核 test-results XML）**；APK 装 SM-X800 实测：三档切换正常、引导框显示正常、拍摄识别抓帧成功（贴纸占比 72% 检出）。截图存 `.tools/verification/ocr-smoke*.png` | ✅ |
+| 2026-08-19 | 阶段 1 决策备忘：SO 流水号映射到 `orderNumber`（与二维码 payload 的 `on` 字段对齐，保证双输入源 ComponentRecord 一致），`\d{4}-\d{4}` 批次号映射 `trackingId`——与 ocr_plan_0818.md §3.5 字面表述有出入，经确认按此执行 | ✅ |
+| 2026-08-19 | 阶段 1 收口：assembleDebug + 全量单测全绿，真机装验三档切换与抓帧 | ✅ |
+| 2026-08-19 | **基准图 + 桌面先行验证**：从真机截图裁剪出基准标签图（`.tools/verification/label-crop.png`，1461x1176，全字段清晰可读）；`.tools/pyvenv` 装 rapidocr + onnxruntime 用本地 PP-OCRv6 small 实测：**10/13 行全对**（内部编码/料号/型号/数量/流水/批次/厂商全部命中，置信度 0.98~1.00），桌面 CPU 单张 1.55s；唯一真漏行是「贴片电容（MLCC)」（截图红色扫描线横穿所致，实机拍摄无此干扰）。注意 cls 模型必须按 PPOCRV5 配置（输入 80x160，默认 v4 的 48x192 会维度报错） | ✅ |
+| 2026-08-19 | GLM-OCR 模型已部署到真机：`/sdcard/Android/data/com.otool.eprint/files/models/glm-ocr-mnn/`（13 文件 1011MB，30MB/s，大小逐一核对一致）。坑：Git Bash 的 MSYS 路径转换会把 adb 远端路径 `/sdcard/...` 改写成本地路径导致假死，须 `MSYS2_ARG_CONV_EXCL="*"` | ✅ |
+| 2026-08-19 | **tiny vs small 对比实测**（桌面，基准图）：tiny 1.34s vs small 1.55s，但 tiny 在关键字段上犯致命误识——型号 `CGA0402C0G120J500GT`→`...COG...`（0→O）、流水号 `SO26063011291`→`S026063011291`（O→0）。**结论坐实：small 为默认档，tiny 仅在耗时不可接受时降级**；同时验证了 LabelTextParser 误识映射表（O↔0）对 tiny 档的必要性 | ✅ |
+| 2026-08-19 | **鲁棒性实测**（桌面，small 档）：基准图的 15° 旋转 / 高斯模糊(r=2.5) / 半分辨率三种退化变体均 **7/7 字段全中**（`.tools/verification/label-{rot15,blur,half}.png`）。§6 边界用例的桌面侧证据已就位，真机侧待 2c 后复测 | ✅ |
+| 2026-08-19 | R5 手写基准物料：GLM-OCR 官方手写样本（`examples/source/handwritten.png`）+ 官方转写结果已取回（`.tools/verification/glm-handwritten-sample.png` / `glm-handwritten-expected.md`），样本已 push 到设备 files 目录；注意官方转写本身即有个别错字（如「入间」应为「人间」），手写 CER 基线需以此为参照而非满分预期 | ✅ |
+| 2026-08-19 | 阶段 2b 中间检查：子代理的 `glm_ocr_jni.cpp`（薄 JNI：load/submit 流式/reset/release/maxNewTokens/updateConfig + prefill/generate 步进 workaround + LlmContext 性能计数器回传）经 NDK clang++ `-fsyntax-only --target=aarch64-linux-android24` 独立验证**零告警通过**；Java 封装（GlmOcrSession/VlmOcrEngine/VlmResult）审查通过（native 可用性守卫、模型目录必需文件校验、MAX_NEW_TOKENS 防退化死循环） | ✅ |
+| 2026-08-19 | 阶段 2b 完成：MNN NDK 薄 JNI 改用标准 `Llm::response` 生成路径；SM-X800 复现电子料标签单 token `333…` 退化，独立原生 harness 证明同模型可正常识别官方手写样本、故障随图片内容触发。最终以确定性 penalty 采样（重复/出现/频率惩罚 1.6/0.8/0.4）修复：同一实拍标签由跑满 256/1024 token 降为 113 token 正常结束，识别出 `3417-B-D06-004`、`QTY:100个`、`C45359894` 等主体，应用内总耗时约 8.6s；另加连续 48 字符退化中止并明确报错，**不自动回退**。标题改“识别解析”，新增“模型配置”并验证进程重启后持久化 | ✅ |
+| 2026-08-19 | 阶段 2a 完成：onnxruntime-android 1.22.0 + PP-OCRv6 det→cls→rec 级联入库（`scan/ocr/` 纯 Java；DB 后处理凸包+旋转卡壳+unclip、CTC greedy 纯 JVM 可测），det_small/rec_small/cls/字典入 `assets/ocr/`（noCompress，abiFilters arm64-v8a，APK ~55MB）；benchmark 埋点随 OcrResult 返回。MainActivity 接线：切入标签档后台预热、识别期按钮转加载态、结果（原文+解析字段+分阶段耗时）展示在扫码原文/本机解析区，不写画布（2c 再确认）。SM-X800 实测 det 316~482ms / cls 70~76ms / rec ~1.8s（16~17 行）/ 共 ~2.4s；立创样品字段全中（料号 C45359894、型号 CGA0402C0G120J500GT、数量 100、订单 SO26063011291、批次 0630-0057，置信度 100%）。130 项单测全绿（新增 CtcDecoder/DbPostProcessor 13 项）。坑：cls 静态输入 80×160（与上行桌面验证结论一致，初版按 48×192 写导致整批行被丢弃；cls 失败已改为降级不丢行）。截图存 `.tools/verification/ocr-stage2a-*.png` | ✅ |
+| — | 阶段 2c：LabelSceneFusion + SlotMatcher + 确认 UI | ⏳ |
+| 2026-08-19 | **桌面先行暴露风险及真机闭环**：pymnn 3.6.1 (Windows x86) 跑 GLM-OCR-MNN，纯文本正常但视觉路径输出「3333…」；ARM 真机在特定电子料标签上同样复现。排除 Java/JNI、图片编码、后端与精度后，确认原模型 greedy penalty=1.1 会陷入采样循环；v1.5.15 用确定性抗重复采样修复并加退化中止。开发阶段不做 PP-OCR 自动替代，两个通道独立展示 | ✅ |
 
 ## 1. 需求重述与约束变更
 
@@ -41,6 +66,16 @@
 - **PP-OCRv6 det-only 常驻（~5-10MB）**：只跑检测不跑识别，输出行级四边形框。作用有二：① 给 VLM 的文本/KIE 结果**配上精确行级坐标**（GLM-OCR 自身只有区域级 bbox，不足以做 R6 的槽位匹配）；② 作为独立第二通道与 VLM 结果交叉校验（冗余度，见 §4）。包体可忽略，无理由不带。
 - **PaddleOCR-VL-1.6 为热替换升级候补**：一旦其 MNN 转换链路在本项目 benchmark 中跑通，它凭原生 spotting（文本+行级四点坐标一次出）可**取代「GLM-OCR + det 通道」的组合**成为单模型方案——届时模型文件级替换即可，架构不变。OvisOCR2 因实拍退化场景存疑且坐标能力未证实，仅观察。
 - **量化档位**：默认 int8（C4' 精度优先）。手写小字对量化敏感，benchmark 需对比 int8/int4 的手写 CER 后再定是否发布 int4 备选包。
+
+### 2.2.1 MNN 接入方式修正（2026-08-19 实施前核实）
+
+原「MNN Android AAR，Java 层直接调」的假设**部分不成立**，实测核实结果：
+
+- MNN 官方 release（v3.6.1，2026-07-23）的 Android 包**只有 .so**（arm64-v8a 的 `libMNN.so` 2.4MB、`libllm.so` 1.3MB、`libMNN_Vulkan.so`、`libMNN_CL.so`、`libc++_shared.so` 等），**没有 Java AAR**；Maven Central / 阿里云 maven 均无 MNN 或 MNN-LLM 的 Java 制品。
+- **MNN-LLM 没有官方 Java 绑定**：官方安卓 app（MnnLlmChat）是自带 JNI 层（`llm_mnn_jni.cpp` / `llm_session.cpp` + Kotlin session 类）直接链接预编译 .so。
+- **结论**：项目需引入**最小 NDK 工程**——CMake 编译一个薄 JNI wrapper（参照 MnnLlmChat 的 JNI 层裁剪，Apache-2.0），链接 release 预编译的 arm64-v8a .so。这是路线 B 的唯一 NDK 改造点；PP-OCRv6 det 通道仍走 onnxruntime-android（Maven Central `com.microsoft.onnxruntime:onnxruntime-android`，2026 年最新 1.22.0；另有 `onnxruntime-android-qnn` 变体可试路由 Hexagon NPU），保持纯 Java。
+- 开发机已就绪：模型文件（GLM-OCR-MNN 4bit 全套 + PP-OCRv6 ONNX det/rec small/tiny + cls + 字典，SHA-256 与官方清单核对一致）在 `.tools/downloads/ocr-models/`；MNN 3.6.1 Android 包在 `.tools/downloads/mnn_android.zip`；官方 JNI 层裁剪源码（`llm_mnn_jni.cpp`/`llm_session.cpp` 等）与 `LlmSession.kt` 在 `.tools/downloads/mnn-llm-src/`。
+- **prompt 约定（2026-08-19 从官方 SDK 源码核实）**：全文转写用官方默认触发词 `Text Recognition:`（SDK 在 prompt 为空时的默认值）；KIE 直出用自定义 prompt 指定 JSON schema。图片以 `<img>本地路径</img>` 标记嵌入 prompt 字符串，由原生层解析加载。模型 `image_size=420`、mrope 位置编码、LLM 4bit(block64)+visual 8bit 量化（`export_args.json` 实测配置）。官方仓库含手写体示例（`examples/result/handwritten/`），R5 可行性有官方背书。
 
 ### 2.3 打包交付（C4'）
 

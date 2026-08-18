@@ -25,12 +25,15 @@ public final class ScanFormatCatalog {
 
     private ScanFormatCatalog() {}
 
-    public static List<BarcodeFormat> formats(boolean barcodeMode) {
-        return barcodeMode ? BARCODE_FORMATS : QR_FORMATS;
+    /** 标签档不使用 ZXing 格式目录（解码已暂停），返回空列表。 */
+    public static List<BarcodeFormat> formats(ScanInputMode mode) {
+        if (mode == ScanInputMode.BARCODE) return BARCODE_FORMATS;
+        if (mode == ScanInputMode.QR) return QR_FORMATS;
+        return Collections.emptyList();
     }
 
-    public static List<String> formatNames(boolean barcodeMode) {
-        List<BarcodeFormat> formats = formats(barcodeMode);
+    public static List<String> formatNames(ScanInputMode mode) {
+        List<BarcodeFormat> formats = formats(mode);
         String[] names = new String[formats.size()];
         for (int index = 0; index < formats.size(); index++) {
             names[index] = formats.get(index).name();

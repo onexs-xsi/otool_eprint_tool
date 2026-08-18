@@ -10,6 +10,7 @@ import android.content.ServiceConnection;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
+import android.graphics.RectF;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
 import android.os.Bundle;
@@ -20,6 +21,7 @@ import android.text.TextUtils;
 import android.text.TextWatcher;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.TextureView;
 import android.view.Window;
 import android.view.WindowManager;
 import android.widget.AdapterView;
@@ -96,7 +98,16 @@ import com.otool.eprint.render.IconCatalog;
 import com.otool.eprint.render.ImageElementRenderer;
 import com.otool.eprint.render.LabelBitmapRenderer;
 import com.otool.eprint.scan.QrContentParser;
+import com.otool.eprint.scan.LabelFrameProcessor;
+import com.otool.eprint.scan.LabelTextParser;
+import com.otool.eprint.scan.ocr.LabelOcrEngine;
+import com.otool.eprint.scan.vlm.VlmOcrEngine;
+import com.otool.eprint.scan.vlm.VlmResult;
+import com.otool.eprint.scan.vlm.VlmSettings;
+import com.otool.eprint.scan.vlm.VlmSettingsStore;
+import com.otool.eprint.scan.ocr.OcrResult;
 import com.otool.eprint.scan.ScanFormatCatalog;
+import com.otool.eprint.scan.ScanInputMode;
 import com.otool.eprint.scan.ComponentLabelParser;
 import com.otool.eprint.scan.ComponentRecord;
 import com.otool.eprint.scan.SupplierFormat;
@@ -105,6 +116,7 @@ import com.otool.eprint.service.ConnectionPhase;
 import com.otool.eprint.service.ConnectionStatus;
 import com.otool.eprint.view.BarcodeModeSwitch;
 import com.otool.eprint.view.LabelCanvasView;
+import com.otool.eprint.view.LabelGuideOverlay;
 import com.otool.eprint.view.SignatureView;
 
 import java.io.File;
@@ -121,6 +133,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicReference;
 
 public final class MainActivity extends AppCompatActivity {
     private static final int ACTION_NONE = 0;
@@ -236,8 +251,20 @@ public final class MainActivity extends AppCompatActivity {
     private boolean templateLargeFont;
     private boolean populatingTemplate;
     private String lastScannedContent = "";
-    private boolean barcodeScanMode;
+    private ScanInputMode scanInputMode = ScanInputMode.QR;
     private boolean embeddedCameraActive = true;
+    private BarcodeCallback embeddedScanCallback;
+    private LabelGuideOverlay labelGuideOverlay;
+    // 标签档最近一次抓帧的处理结果，阶段 2 接入 OCR 引擎后作为识别输入。
+    private Bitmap lastLabelFrame;
+    // PP-OCRv6 级联 OCR 引擎（阶段 2a）：单线程后台执行，切入标签档时预热加载。
+    private final LabelOcrEngine labelOcrEngine = new LabelOcrEngine();
+    // GLM-OCR VLM 引擎（阶段 2b）：开发阶段独立展示，不启用自动回退。
+    private final VlmOcrEngine vlmOcrEngine = new VlmOcrEngine();
+    /** 超时后 requestStop 生效的等待上限。 */
+    private static final long VLM_STOP_WAIT_MS = 10_000;
+    private final ExecutorService ocrExecutor = Executors.newSingleThreadExecutor();
+    private boolean ocrRunning;
     private boolean populatingEditor;
     private boolean populatingProfile;
     private boolean populatingLabelSize;
@@ -315,6 +342,7 @@ public final class MainActivity extends AppCompatActivity {
     private final ActivityResultLauncher<String> cameraPermissionLauncher = registerForActivityResult(
             new ActivityResultContracts.RequestPermission(), granted -> {
                 if (granted && barcodeScanner != null) startEmbeddedScanner();
+                else if (granted && scanInputMode == ScanInputMode.LABEL) toast("请横屏使用拍摄识别");
                 else if (granted) launchScanner();
                 else toast("需要相机权限才能扫描二维码或条形码");
             });
@@ -467,6 +495,7 @@ public final class MainActivity extends AppCompatActivity {
         qrResultText = findViewById(R.id.qrResultText);
         qrParseSummary = findViewById(R.id.qrParseSummary);
         scanModeSwitch = findViewById(R.id.scanModeSwitch);
+        labelGuideOverlay = findViewById(R.id.labelGuideOverlay);
         workModeSpinner = findViewById(R.id.workModeSpinner);
         supplierSpinner = findViewById(R.id.supplierSpinner);
         componentPanel = findViewById(R.id.componentPanel);
@@ -585,13 +614,15 @@ public final class MainActivity extends AppCompatActivity {
 
     private void configureEmbeddedScanner() {
         if (scanModeSwitch != null) {
-            scanModeSwitch.setBarcodeMode(barcodeScanMode);
+            scanModeSwitch.setMode(scanInputMode);
             scanModeSwitch.setOnModeChangedListener(this::changeScanMode);
         }
-        if (barcodeScanner == null) return;
+        if (barcodeScanner == null) {
+            updateScanButtonLabel();
+            return;
+        }
         barcodeScanner.setStatusText("");
-        applyDecoderFormats();
-        barcodeScanner.decodeContinuous(new BarcodeCallback() {
+        embeddedScanCallback = new BarcodeCallback() {
             @Override
             public void barcodeResult(BarcodeResult result) {
                 String text = result == null ? null : result.getText();
@@ -601,27 +632,68 @@ public final class MainActivity extends AppCompatActivity {
 
             @Override
             public void possibleResultPoints(List<ResultPoint> resultPoints) {}
-        });
+        };
+        applyDecoderFormats();
+        barcodeScanner.decodeContinuous(embeddedScanCallback);
+        applyScanInputModeUi();
     }
 
-    private void changeScanMode(boolean barcodeMode) {
-        barcodeScanMode = barcodeMode;
+    private void changeScanMode(ScanInputMode mode) {
+        scanInputMode = mode;
         lastScannedContent = "";
-        applyDecoderFormats();
-        if (qrResultText != null) {
-            qrResultText.setText(barcodeMode
-                    ? "等待条形码进入取景框…" : "等待二维码进入取景框…");
+        if (mode == ScanInputMode.LABEL) {
+            // 标签档暂停 ZXing 连续解码（保留预览供抓帧），避免二维码抢跑结束。
+            if (barcodeScanner != null) barcodeScanner.getBarcodeView().stopDecoding();
+            if (qrResultText != null) {
+                qrResultText.setText(barcodeScanner != null
+                        ? "对准标签后点按「拍摄识别」" : "请横屏使用拍摄识别");
+            }
+            if (qrParseSummary != null) {
+                qrParseSummary.setText("标签整面识别在本机完成，不上传照片");
+            }
+            // 后台预热 OCR 模型，首次拍摄不必等待加载。
+            warmUpLabelOcr();
+        } else {
+            applyDecoderFormats();
+            if (barcodeScanner != null && embeddedCameraActive && embeddedScanCallback != null) {
+                barcodeScanner.decodeContinuous(embeddedScanCallback);
+            }
+            if (qrResultText != null) {
+                qrResultText.setText(mode == ScanInputMode.BARCODE
+                        ? "等待条形码进入取景框…" : "等待二维码进入取景框…");
+            }
+            if (qrParseSummary != null) {
+                qrParseSummary.setText("全部解析在本机完成，不上传扫码内容");
+            }
         }
-        if (qrParseSummary != null) {
-            qrParseSummary.setText("全部解析在本机完成，不上传扫码内容");
+        applyScanInputModeUi();
+        toast("已切换到" + mode.label + "识别");
+    }
+
+    private void applyScanInputModeUi() {
+        if (labelGuideOverlay != null) {
+            labelGuideOverlay.setVisibility(
+                    scanInputMode == ScanInputMode.LABEL ? View.VISIBLE : View.GONE);
         }
-        toast(barcodeMode ? "已切换到条形码识别" : "已切换到二维码识别");
+        updateScanButtonLabel();
+    }
+
+    private void updateScanButtonLabel() {
+        View button = findViewById(R.id.scanButton);
+        if (!(button instanceof Button)) return;
+        if (scanInputMode == ScanInputMode.LABEL) {
+            ((Button) button).setText("拍摄识别");
+        } else if (barcodeScanner != null) {
+            ((Button) button).setText(embeddedCameraActive ? "暂停摄像头" : "启动摄像头");
+        } else {
+            ((Button) button).setText("摄像头扫描");
+        }
     }
 
     private void applyDecoderFormats() {
-        if (barcodeScanner == null) return;
+        if (barcodeScanner == null || scanInputMode == ScanInputMode.LABEL) return;
         barcodeScanner.getBarcodeView().setDecoderFactory(new DefaultDecoderFactory(
-                ScanFormatCatalog.formats(barcodeScanMode)));
+                ScanFormatCatalog.formats(scanInputMode)));
     }
 
     private void configureSpinners() {
@@ -879,6 +951,8 @@ public final class MainActivity extends AppCompatActivity {
         findViewById(R.id.connectButton).setOnClickListener(view -> requestBluetoothAction(ACTION_CHOOSE_PRINTER));
         findViewById(R.id.diagnosticsButton).setOnClickListener(view -> showDiagnostics());
         findViewById(R.id.profileSettingsButton).setOnClickListener(view -> showProfileSettings());
+        View modelConfig = findViewById(R.id.modelConfigButton);
+        if (modelConfig != null) modelConfig.setOnClickListener(view -> showModelConfigDialog());
         findViewById(R.id.disconnectButton).setOnClickListener(view -> {
             if (printerService != null) printerService.disconnect();
         });
@@ -2075,6 +2149,14 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     private void requestScan() {
+        if (scanInputMode == ScanInputMode.LABEL) {
+            if (barcodeScanner == null) {
+                toast("请横屏使用拍摄识别");
+                return;
+            }
+            captureAndProcessLabel();
+            return;
+        }
         if (barcodeScanner != null) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
                     != PackageManager.PERMISSION_GRANTED) {
@@ -2093,10 +2175,223 @@ public final class MainActivity extends AppCompatActivity {
         }
     }
 
+    /** 标签档「拍摄识别」：抓帧 → 引导框 ROI → 轮廓自校正。OCR 引擎在阶段 2 接入。 */
+    private void captureAndProcessLabel() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
+                != PackageManager.PERMISSION_GRANTED) {
+            cameraPermissionLauncher.launch(Manifest.permission.CAMERA);
+            return;
+        }
+        if (!embeddedCameraActive) {
+            startEmbeddedScanner();
+            toast("摄像头启动中，请稍后再次点按拍摄识别");
+            return;
+        }
+        TextureView preview = findTextureView(barcodeScanner);
+        Bitmap frame = LabelFrameProcessor.capturePreviewFrame(preview);
+        if (frame == null) {
+            toast("相机预览尚未就绪，请稍后重试");
+            return;
+        }
+        RectF guide = labelGuideOverlay != null
+                ? labelGuideOverlay.normalizedGuideRect()
+                : new RectF(0.07f, 0.07f, 0.93f, 0.93f);
+        LabelFrameProcessor.ProcessedFrame processed = LabelFrameProcessor.process(frame, guide);
+        lastLabelFrame = processed.bitmap;
+        StringBuilder summary = new StringBuilder("已抓取标签画面");
+        if (processed.region.found) {
+            summary.append("，贴纸占比约 ")
+                    .append(Math.round(processed.region.coverage * 100)).append('%');
+            if (Math.abs(processed.region.angleDegrees)
+                    >= LabelFrameProcessor.DESKEW_MIN_ANGLE_DEGREES) {
+                summary.append("，已旋正 ")
+                        .append(String.format(Locale.US, "%.1f", processed.region.angleDegrees))
+                        .append("°");
+            }
+        } else {
+            summary.append("，未检出贴纸轮廓，已保留引导框整图");
+        }
+        if (qrParseSummary != null) qrParseSummary.setText(summary.toString());
+        if (workMode == WorkMode.COMPONENT_ORGANIZATION && componentRecordSummary != null) {
+            componentRecordSummary.setText(summary.toString());
+        }
+        if (processed.blurry) toast("画面偏糊，请拿稳后重拍");
+        runLabelOcr(processed.bitmap);
+    }
+
+    /** 后台跑 PP-OCRv6 级联（det→cls→rec），随后接 GLM-OCR VLM（阶段 2b）。识别期间「拍摄识别」按钮转加载态。 */
+    private void runLabelOcr(Bitmap frame) {
+        if (ocrRunning) {
+            toast("正在识别中，请稍候");
+            return;
+        }
+        ocrRunning = true;
+        setScanButtonBusy(true);
+        ocrExecutor.execute(() -> {
+            labelOcrEngine.load(getApplicationContext());
+            if (!labelOcrEngine.isReady()) {
+                final String error = labelOcrEngine.initError();
+                runOnUiThread(() -> {
+                    ocrRunning = false;
+                    setScanButtonBusy(false);
+                    if (qrParseSummary != null) {
+                        qrParseSummary.setText("OCR 引擎加载失败（" + error
+                                + "），扫码功能不受影响，请反馈或重装应用");
+                    }
+                    toast("OCR 引擎不可用，拍摄识别已停用");
+                });
+                return;
+            }
+            final OcrResult result = labelOcrEngine.recognize(frame);
+            runOnUiThread(() -> showLabelOcrResult(result));
+            // VLM 慢（秒级~十秒级），级联结果先展示，VLM 结果流式追加。
+            runLabelVlm(frame, result);
+            runOnUiThread(() -> {
+                ocrRunning = false;
+                setScanButtonBusy(false);
+            });
+        });
+    }
+
+    /** VLM 通道（GLM-OCR 0.9B，MNN）。开发阶段独立显示结果，不启用自动回退。 */
+    private void runLabelVlm(Bitmap frame, OcrResult cascade) {
+        vlmOcrEngine.load(getApplicationContext());
+        if (!vlmOcrEngine.isReady()) {
+            final String reason = vlmOcrEngine.initError();
+            runOnUiThread(() -> appendVlmNote("VLM（GLM-OCR）不可用：" + reason));
+            return;
+        }
+        runOnUiThread(() -> {
+            setScanButtonBusy(true);
+            Button button = findScanButton();
+            if (button != null) button.setText("VLM 识别中…");
+            appendVlmNote("VLM（GLM-OCR 0.9B）识别中，通常需 5~60 秒…");
+        });
+        final StringBuilder streamed = new StringBuilder();
+        final AtomicReference<VlmResult> vlmRef = new AtomicReference<>();
+        Thread vlmThread = new Thread(() -> vlmRef.set(vlmOcrEngine.recognize(
+                frame, getCacheDir(), chunk -> {
+                    streamed.append(chunk);
+                    final String partial = streamed.toString();
+                    runOnUiThread(() -> showVlmText(cascade, partial,
+                            "VLM（GLM-OCR 0.9B · MNN）识别中…"));
+                    return false;
+                })), "vlm-ocr");
+        vlmThread.start();
+        final long timeoutMs = vlmOcrEngine.timeoutMs();
+        try {
+            vlmThread.join(timeoutMs);
+        } catch (InterruptedException ignored) {
+            Thread.currentThread().interrupt();
+        }
+        boolean timedOut = vlmThread.isAlive();
+        if (timedOut) {
+            vlmOcrEngine.requestStop();
+            try {
+                vlmThread.join(VLM_STOP_WAIT_MS);
+            } catch (InterruptedException ignored) {
+                Thread.currentThread().interrupt();
+            }
+        }
+        final VlmResult vlm = vlmRef.get();
+        final boolean vlmTimedOut = timedOut && vlm == null;
+        runOnUiThread(() -> {
+            if (vlmTimedOut) {
+                showLabelOcrResult(cascade);
+                appendVlmNote("VLM 超时（>" + (timeoutMs / 1000) + "s），未采用其结果");
+                toast("VLM 识别超时");
+            } else if (vlm == null || !vlm.isOk()) {
+                String error = vlm != null ? vlm.error : "识别被中断";
+                showLabelOcrResult(cascade);
+                appendVlmNote("VLM 识别失败：" + error);
+                toast("VLM 识别失败");
+            } else {
+                String header = "VLM（GLM-OCR 0.9B · MNN）全文"
+                        + (vlmOcrEngine.loadMs() >= 0 ? " · 加载 " + vlmOcrEngine.loadMs() + "ms" : "")
+                        + " · " + vlm.timingSummary()
+                        + (vlm.stopped ? " · 超时截断" : "");
+                showVlmText(cascade, vlm.text, header);
+                appendVlmNote("VLM 完成：" + vlm.timingSummary()
+                        + (vlm.stopped ? "（超时截断，输出为部分结果）" : ""));
+                toast("VLM 识别完成：" + vlm.totalMs + "ms");
+            }
+        });
+    }
+
+    /** 原文区展示：级联原文 + VLM 全文分段（标注来源与耗时）。UI 线程调用。 */
+    private void showVlmText(OcrResult cascade, String vlmText, String header) {
+        if (qrResultText == null) return;
+        StringBuilder text = new StringBuilder(cascade.fullText());
+        text.append("\n\n── ").append(header).append(" ──\n").append(vlmText);
+        qrResultText.setText(text.toString());
+    }
+
+    /** 本机解析区追加一行 VLM 状态（进度/降级原因/耗时）。UI 线程调用。 */
+    private void appendVlmNote(String note) {
+        if (qrParseSummary != null) qrParseSummary.append("\n" + note);
+        if (workMode == WorkMode.COMPONENT_ORGANIZATION && componentRecordSummary != null) {
+            componentRecordSummary.append("\n" + note);
+        }
+    }
+
+    private Button findScanButton() {
+        View button = findViewById(R.id.scanButton);
+        return button instanceof Button ? (Button) button : null;
+    }
+
+    /** OCR 结果展示：原文进「扫码原文」，解析字段 + 分阶段耗时进「本机解析」。不写入模板/画布（阶段 2c）。 */
+    private void showLabelOcrResult(OcrResult result) {
+        if (result.lines.isEmpty()) {
+            if (qrParseSummary != null) {
+                qrParseSummary.setText("未识别到文本（" + result.timingSummary() + "）");
+            }
+            toast("未识别到文本，请对准标签重拍");
+            return;
+        }
+        ComponentRecord record = LabelTextParser.parse(result.lines);
+        if (qrResultText != null) qrResultText.setText(result.fullText());
+        String summary = record.summary() + "\n" + result.timingSummary();
+        if (qrParseSummary != null) qrParseSummary.setText(summary);
+        if (workMode == WorkMode.COMPONENT_ORGANIZATION && componentRecordSummary != null) {
+            componentRecordSummary.setText(summary);
+        }
+        toast("识别完成：" + result.lines.size() + " 行，共 " + result.totalMs + "ms");
+    }
+
+    /** 切入标签档时后台预热模型（幂等，失败只记录不崩溃）。VLM 模型大、加载慢，一并预热。 */
+    private void warmUpLabelOcr() {
+        if (!labelOcrEngine.isReady() && labelOcrEngine.initError() == null) {
+            ocrExecutor.execute(() -> labelOcrEngine.load(getApplicationContext()));
+        }
+        if (!vlmOcrEngine.isReady() && vlmOcrEngine.initError() == null) {
+            ocrExecutor.execute(() -> vlmOcrEngine.load(getApplicationContext()));
+        }
+    }
+
+    private void setScanButtonBusy(boolean busy) {
+        View button = findViewById(R.id.scanButton);
+        if (!(button instanceof Button)) return;
+        button.setEnabled(!busy);
+        if (busy) ((Button) button).setText("识别中…");
+        else updateScanButtonLabel();
+    }
+
+    private static TextureView findTextureView(View root) {
+        if (root instanceof TextureView) return (TextureView) root;
+        if (root instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) root;
+            for (int index = 0; index < group.getChildCount(); index++) {
+                TextureView found = findTextureView(group.getChildAt(index));
+                if (found != null) return found;
+            }
+        }
+        return null;
+    }
+
     private void launchScanner() {
         ScanOptions options = new ScanOptions()
-                .setDesiredBarcodeFormats(ScanFormatCatalog.formatNames(barcodeScanMode))
-                .setPrompt(barcodeScanMode ? "将条形码放入取景框" : "将二维码放入取景框")
+                .setDesiredBarcodeFormats(ScanFormatCatalog.formatNames(scanInputMode))
+                .setPrompt(scanInputMode == ScanInputMode.BARCODE ? "将条形码放入取景框" : "将二维码放入取景框")
                 .setBeepEnabled(false)
                 .setOrientationLocked(false)
                 .setBarcodeImageEnabled(false);
@@ -2155,7 +2450,7 @@ public final class MainActivity extends AppCompatActivity {
         labelCanvas.select(selected.id);
         showSelectedElement(selected);
         persistAndRedraw();
-        toast(barcodeScanMode
+        toast(scanInputMode == ScanInputMode.BARCODE
                 ? "已识别条形码并放入右侧画布" : "已解析二维码并放入右侧画布");
     }
 
@@ -2163,16 +2458,14 @@ public final class MainActivity extends AppCompatActivity {
         if (barcodeScanner == null) return;
         embeddedCameraActive = true;
         barcodeScanner.resume();
-        View button = findViewById(R.id.scanButton);
-        if (button instanceof android.widget.Button) ((android.widget.Button) button).setText("暂停摄像头");
+        updateScanButtonLabel();
     }
 
     private void pauseEmbeddedScanner() {
         if (barcodeScanner == null) return;
         embeddedCameraActive = false;
         barcodeScanner.pause();
-        View button = findViewById(R.id.scanButton);
-        if (button instanceof android.widget.Button) ((android.widget.Button) button).setText("启动摄像头");
+        updateScanButtonLabel();
     }
 
     private void applyCanvasSize() {
@@ -2952,6 +3245,98 @@ public final class MainActivity extends AppCompatActivity {
                 .show();
     }
 
+    private void showModelConfigDialog() {
+        VlmSettings current = VlmSettingsStore.load(this);
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(20), dp(8), dp(20), dp(16));
+
+        File modelDir = VlmOcrEngine.modelDir(this);
+        String missing = VlmOcrEngine.missingModelFile(modelDir);
+        TextView status = new TextView(this);
+        status.setText("GLM-OCR 0.9B · MNN"
+                + "\n模型：" + (missing == null ? "已部署" : "缺少 " + missing)
+                + "\n目录：" + modelDir.getAbsolutePath()
+                + "\n配置保存后重启生效；开发阶段不启用自动 OCR 回退。");
+        status.setTextColor(ContextCompat.getColor(this, R.color.eprint_text));
+        status.setTextIsSelectable(true);
+        status.setPadding(0, dp(4), 0, dp(8));
+        form.addView(status);
+
+        Spinner backend = addModelSettingSpinner(form, "推理后端",
+                VlmSettings.BACKEND_LABELS,
+                VlmSettings.indexOf(current.backend, VlmSettings.BACKEND_VALUES));
+        EditText threads = addSettingField(form, "CPU 线程数（1-8）", current.threadCount, true);
+        Spinner precision = addModelSettingSpinner(form, "计算精度",
+                VlmSettings.PRECISION_LABELS,
+                VlmSettings.indexOf(current.precision, VlmSettings.PRECISION_VALUES));
+        Spinner memory = addModelSettingSpinner(form, "内存策略",
+                VlmSettings.MEMORY_LABELS,
+                VlmSettings.indexOf(current.memory, VlmSettings.MEMORY_VALUES));
+        EditText maxTokens = addSettingField(form, "最大输出 Token（64-2048）",
+                current.maxNewTokens, true);
+        EditText timeout = addSettingField(form, "单次识别超时秒数（10-300）",
+                current.timeoutSeconds, true);
+        EditText repetitionPenalty = addDecimalSettingField(form,
+                "重复惩罚（1.0-3.0；当前标签建议 1.6）", current.repetitionPenalty);
+        EditText presencePenalty = addDecimalSettingField(form,
+                "出现惩罚（0.0-2.0；当前标签建议 0.8）", current.presencePenalty);
+        EditText frequencyPenalty = addDecimalSettingField(form,
+                "频率惩罚（0.0-2.0；当前标签建议 0.4）", current.frequencyPenalty);
+        EditText prompt = addSettingField(form, "识别提示词", current.prompt, false);
+
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(form);
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("模型配置")
+                .setView(scroll)
+                .setNegativeButton("取消", null)
+                .setPositiveButton("保存", null)
+                .create();
+        dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+                .setOnClickListener(view -> {
+                    try {
+                        String promptValue = prompt.getText().toString().trim();
+                        if (promptValue.isEmpty()) throw new IllegalArgumentException("识别提示词不能为空");
+                        VlmSettings saved = new VlmSettings(
+                                VlmSettings.BACKEND_VALUES[backend.getSelectedItemPosition()],
+                                integerInRange(threads, 1, 8, "CPU 线程数"),
+                                VlmSettings.PRECISION_VALUES[precision.getSelectedItemPosition()],
+                                VlmSettings.MEMORY_VALUES[memory.getSelectedItemPosition()],
+                                integerInRange(maxTokens, 64, 2048, "最大输出 Token"),
+                                integerInRange(timeout, 10, 300, "识别超时"),
+                                floatInRange(repetitionPenalty, 1.0f, 3.0f, "重复惩罚"),
+                                floatInRange(presencePenalty, 0.0f, 2.0f, "出现惩罚"),
+                                floatInRange(frequencyPenalty, 0.0f, 2.0f, "频率惩罚"),
+                                promptValue);
+                        VlmSettingsStore.save(this, saved);
+                        toast("模型配置已保存，重启应用后生效");
+                        dialog.dismiss();
+                    } catch (IllegalArgumentException invalid) {
+                        toast(invalid.getMessage());
+                    }
+                }));
+        dialog.show();
+    }
+
+    private Spinner addModelSettingSpinner(LinearLayout form, String label,
+                                           String[] labels, int selection) {
+        TextView title = new TextView(this);
+        title.setText(label);
+        title.setTextColor(ContextCompat.getColor(this, R.color.eprint_muted));
+        title.setPadding(0, dp(8), 0, 0);
+        form.addView(title);
+        Spinner spinner = new Spinner(this);
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(this,
+                android.R.layout.simple_spinner_item, labels);
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        spinner.setAdapter(adapter);
+        spinner.setSelection(Math.max(0, Math.min(labels.length - 1, selection)));
+        form.addView(spinner, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(48)));
+        return spinner;
+    }
+
     private void showProfileSettings() {
         LinearLayout form = new LinearLayout(this);
         form.setOrientation(LinearLayout.VERTICAL);
@@ -3278,6 +3663,12 @@ public final class MainActivity extends AppCompatActivity {
         return addSettingField(form, label, Integer.toString(value), numeric);
     }
 
+    private EditText addDecimalSettingField(LinearLayout form, String label, float value) {
+        EditText input = addSettingField(form, label, Float.toString(value), true);
+        input.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        return input;
+    }
+
     private EditText addSettingField(LinearLayout form, String label, String value, boolean numeric) {
         TextView title = new TextView(this);
         title.setText(label);
@@ -3299,6 +3690,18 @@ public final class MainActivity extends AppCompatActivity {
         try {
             int value = Integer.parseInt(input.getText().toString().trim());
             if (value < minimum || value > maximum) throw new NumberFormatException();
+            return value;
+        } catch (NumberFormatException invalid) {
+            throw new IllegalArgumentException(label + "必须在 " + minimum + " 到 " + maximum + " 之间");
+        }
+    }
+
+    private static float floatInRange(EditText input, float minimum, float maximum, String label) {
+        try {
+            float value = Float.parseFloat(input.getText().toString().trim());
+            if (!Float.isFinite(value) || value < minimum || value > maximum) {
+                throw new NumberFormatException();
+            }
             return value;
         } catch (NumberFormatException invalid) {
             throw new IllegalArgumentException(label + "必须在 " + minimum + " 到 " + maximum + " 之间");
@@ -3386,6 +3789,10 @@ public final class MainActivity extends AppCompatActivity {
     protected void onDestroy() {
         if (printerService != null) printerService.removeListener(hardwareListener);
         if (serviceBound) unbindService(hardwareServiceConnection);
+        vlmOcrEngine.requestStop();
+        ocrExecutor.shutdown();
+        labelOcrEngine.close();
+        vlmOcrEngine.close();
         super.onDestroy();
     }
 

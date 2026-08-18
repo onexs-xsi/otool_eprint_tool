@@ -12,10 +12,12 @@ import android.view.accessibility.AccessibilityEvent;
 
 import androidx.annotation.Nullable;
 
-/** A compact two-state scanner mode control with both labels inside the track. */
+import com.otool.eprint.scan.ScanInputMode;
+
+/** 通用 N 段扫描模式控件：标签 · 二维码 · 条形码，标签文字绘制在轨道内部。 */
 public final class BarcodeModeSwitch extends View {
     public interface Listener {
-        void onModeChanged(boolean barcodeMode);
+        void onModeChanged(ScanInputMode mode);
     }
 
     private static final int TRACK_COLOR = 0xFFE5ECE8;
@@ -24,6 +26,8 @@ public final class BarcodeModeSwitch extends View {
     private static final int SELECTED_TEXT_COLOR = 0xFFFFFFFF;
     private static final int UNSELECTED_TEXT_COLOR = 0xFF1C4B40;
 
+    private static final ScanInputMode[] MODES = ScanInputMode.values();
+
     private final Paint trackPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint borderPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint thumbPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -31,8 +35,8 @@ public final class BarcodeModeSwitch extends View {
     private final RectF trackBounds = new RectF();
     private final RectF thumbBounds = new RectF();
 
-    private boolean barcodeMode;
-    private float thumbPosition;
+    private int modeIndex = ScanInputMode.QR.index();
+    private float thumbPosition = modeIndex;
     @Nullable private Listener listener;
     @Nullable private ValueAnimator animator;
 
@@ -64,17 +68,17 @@ public final class BarcodeModeSwitch extends View {
         this.listener = listener;
     }
 
-    public boolean isBarcodeMode() {
-        return barcodeMode;
+    public ScanInputMode getMode() {
+        return ScanInputMode.fromIndex(modeIndex);
     }
 
-    public void setBarcodeMode(boolean barcodeMode) {
-        setBarcodeMode(barcodeMode, false);
+    public void setMode(ScanInputMode mode) {
+        setModeIndex(mode.index(), false);
     }
 
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
-        int desiredWidth = Math.round(dp(184));
+        int desiredWidth = Math.round(dp(240));
         int desiredHeight = Math.round(dp(44));
         setMeasuredDimension(resolveSize(desiredWidth, widthMeasureSpec),
                 resolveSize(desiredHeight, heightMeasureSpec));
@@ -88,19 +92,22 @@ public final class BarcodeModeSwitch extends View {
         float radius = trackBounds.height() / 2f;
         canvas.drawRoundRect(trackBounds, radius, radius, trackPaint);
 
+        int segments = MODES.length;
         float thumbInset = dp(3);
-        float thumbWidth = (trackBounds.width() - thumbInset * 2f) / 2f;
-        float thumbLeft = trackBounds.left + thumbInset + thumbPosition * thumbWidth;
+        float segmentWidth = (trackBounds.width() - thumbInset * 2f) / segments;
+        float thumbLeft = trackBounds.left + thumbInset + thumbPosition * segmentWidth;
         thumbBounds.set(thumbLeft, trackBounds.top + thumbInset,
-                thumbLeft + thumbWidth, trackBounds.bottom - thumbInset);
+                thumbLeft + segmentWidth, trackBounds.bottom - thumbInset);
         float thumbRadius = thumbBounds.height() / 2f;
         canvas.drawRoundRect(thumbBounds, thumbRadius, thumbRadius, thumbPaint);
         canvas.drawRoundRect(trackBounds, radius, radius, borderPaint);
 
         Paint.FontMetrics metrics = textPaint.getFontMetrics();
         float baseline = getHeight() / 2f - (metrics.ascent + metrics.descent) / 2f;
-        drawLabel(canvas, "二维码", getWidth() * 0.25f, baseline, !barcodeMode);
-        drawLabel(canvas, "条形码", getWidth() * 0.75f, baseline, barcodeMode);
+        for (int index = 0; index < segments; index++) {
+            float centerX = getWidth() * (index + 0.5f) / segments;
+            drawLabel(canvas, MODES[index].label, centerX, baseline, index == modeIndex);
+        }
     }
 
     private void drawLabel(Canvas canvas, String label, float x, float baseline, boolean selected) {
@@ -117,8 +124,8 @@ public final class BarcodeModeSwitch extends View {
         }
         if (event.getActionMasked() == MotionEvent.ACTION_UP) {
             setPressed(false);
-            boolean requestedBarcodeMode = event.getX() >= getWidth() / 2f;
-            setBarcodeMode(requestedBarcodeMode, true);
+            ScanInputMode requested = ScanInputMode.forFraction(event.getX() / getWidth());
+            setModeIndex(requested.index(), true);
             super.performClick();
             return true;
         }
@@ -132,18 +139,18 @@ public final class BarcodeModeSwitch extends View {
     @Override
     public boolean performClick() {
         super.performClick();
-        setBarcodeMode(!barcodeMode, true);
+        setModeIndex((modeIndex + 1) % MODES.length, true);
         return true;
     }
 
-    private void setBarcodeMode(boolean barcodeMode, boolean notify) {
-        boolean changed = this.barcodeMode != barcodeMode;
-        this.barcodeMode = barcodeMode;
-        animateThumbTo(barcodeMode ? 1f : 0f);
+    private void setModeIndex(int index, boolean notify) {
+        boolean changed = this.modeIndex != index;
+        this.modeIndex = index;
+        animateThumbTo(index);
         updateAccessibilityDescription();
         if (changed && notify) {
             sendAccessibilityEvent(AccessibilityEvent.TYPE_VIEW_SELECTED);
-            if (listener != null) listener.onModeChanged(barcodeMode);
+            if (listener != null) listener.onModeChanged(ScanInputMode.fromIndex(index));
         }
     }
 
@@ -164,9 +171,7 @@ public final class BarcodeModeSwitch extends View {
     }
 
     private void updateAccessibilityDescription() {
-        setContentDescription(barcodeMode
-                ? "扫描模式：条形码。点击左侧切换二维码"
-                : "扫描模式：二维码。点击右侧切换条形码");
+        setContentDescription("扫描模式：" + MODES[modeIndex].label + "。点击切换其他模式");
     }
 
     private float dp(float value) {

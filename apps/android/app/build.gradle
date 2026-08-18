@@ -5,15 +5,40 @@ plugins {
 android {
     namespace 'com.otool.eprint'
     compileSdk 36
+    // 阶段 2b：GLM-OCR (MNN-LLM) 薄 JNI wrapper 需要 NDK。
+    ndkVersion '27.3.13750724'
 
     defaultConfig {
         applicationId 'com.otool.eprint'
         minSdk 24
         targetSdk 36
-        versionCode 20
-        versionName '1.5.14'
+        versionCode 21
+        versionName '1.5.15'
 
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
+
+        // 目标机 SM-X800 为 arm64；onnxruntime / MNN native 库只打 arm64-v8a，控制包体。
+        ndk {
+            abiFilters 'arm64-v8a'
+        }
+    }
+
+    // GLM-OCR JNI wrapper（src/main/cpp），链接 jniLibs 下 MNN 3.6.1 预编译 .so。
+    externalNativeBuild {
+        cmake {
+            path file('src/main/cpp/CMakeLists.txt')
+            version '3.22.1'
+        }
+    }
+
+    packagingOptions {
+        // jniLibs 里随 MNN 官方的 libc++_shared.so 与 NDK 构建产物冲突，取先者。
+        pickFirst 'lib/arm64-v8a/libc++_shared.so'
+    }
+
+    // .onnx 已不可再压缩，跳过 aapt 压缩避免拖慢安装。
+    aaptOptions {
+        noCompress 'onnx'
     }
 
     buildTypes {
@@ -39,6 +64,7 @@ dependencies {
     implementation 'androidx.core:core:1.17.0'
     implementation 'com.journeyapps:zxing-android-embedded:4.3.0'
     implementation 'com.google.zxing:core:3.5.3'
+    implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.22.0'
 
     testImplementation 'junit:junit:4.13.2'
     testImplementation 'org.json:json:20240303'

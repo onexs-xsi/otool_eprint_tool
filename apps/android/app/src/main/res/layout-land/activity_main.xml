@@ -59,23 +59,56 @@
             android:textColor="#BFE3D8"
             android:textSize="11sp" />
 
-        <TextView
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="5dp"
-            android:text="摄像头扫码与离线解析"
-            android:textColor="@color/eprint_paper"
-            android:textSize="16sp"
-            android:textStyle="bold" />
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
 
-        <com.journeyapps.barcodescanner.DecoratedBarcodeView
-            android:id="@+id/barcodeScanner"
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="识别解析"
+                android:textColor="@color/eprint_paper"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <Button
+                android:id="@+id/modelConfigButton"
+                android:layout_width="wrap_content"
+                android:layout_height="34dp"
+                android:background="@drawable/button_secondary"
+                android:minHeight="0dp"
+                android:minWidth="0dp"
+                android:paddingStart="12dp"
+                android:paddingEnd="12dp"
+                android:text="模型配置"
+                android:textAllCaps="false"
+                android:textColor="@color/eprint_text"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_marginTop="6dp"
-            android:layout_weight="1"
-            android:background="#071512"
-            app:zxing_use_texture_view="true" />
+            android:layout_weight="1">
+
+            <com.journeyapps.barcodescanner.DecoratedBarcodeView
+                android:id="@+id/barcodeScanner"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="#071512"
+                app:zxing_use_texture_view="true" />
+
+            <com.otool.eprint.view.LabelGuideOverlay
+                android:id="@+id/labelGuideOverlay"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:visibility="gone" />
+        </FrameLayout>
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -101,7 +134,7 @@
                 android:layout_width="0dp"
                 android:layout_height="44dp"
                 android:layout_marginStart="4dp"
-                android:layout_weight="1"
+                android:layout_weight="1.4"
                 android:importantForAccessibility="yes" />
         </LinearLayout>
 
