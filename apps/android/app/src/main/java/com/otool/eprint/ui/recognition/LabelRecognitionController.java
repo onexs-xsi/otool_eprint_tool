@@ -306,7 +306,7 @@ public final class LabelRecognitionController {
         final StringBuilder streamed = new StringBuilder();
         final AtomicReference<VlmResult> vlmRef = new AtomicReference<>();
         Thread vlmThread = new Thread(() -> vlmRef.set(vlmOcrEngine.recognize(
-                structuredInput, activity.getCacheDir(), chunk -> {
+                structuredInput, activity.getCacheDir(), cascade.fullText(), chunk -> {
                     streamed.append(chunk);
                     final String partial = streamed.toString();
                     activity.runOnUiThread(() -> showVlmText(cascade, partial,
@@ -335,7 +335,7 @@ public final class LabelRecognitionController {
         String parseError = null;
         if (vlm != null && vlm.isOk()) {
             try {
-                parsed = GlmInformationExtractionParser.parse(vlm.text);
+                parsed = GlmInformationExtractionParser.parse(vlm.text, cascadeRecord);
             } catch (org.json.JSONException invalidJson) {
                 parseError = invalidJson.getMessage();
             }

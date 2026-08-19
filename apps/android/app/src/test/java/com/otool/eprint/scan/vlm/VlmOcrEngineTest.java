@@ -63,6 +63,24 @@ public class VlmOcrEngineTest {
     }
 
     @Test
+    public void buildInformationExtractionPrompt_addsBoundedSanitizedOcrEvidence() {
+        File image = new File("/sdcard/Android/data/com.otool.eprint/cache/vlm_input.png");
+        String prompt = VlmOcrEngine.buildInformationExtractionPrompt(image, "KIE:",
+                "3417-B-D06-004\r\nCGA0402C0G120J500GT\u0000\n12pF   ±5% 50V");
+
+        assertTrue(prompt.contains("<ocr_reference>"));
+        assertTrue(prompt.contains("3417-B-D06-004\nCGA0402C0G120J500GT"));
+        assertTrue(prompt.contains("12pF ±5% 50V"));
+        assertFalse(prompt.contains("\u0000"));
+        assertTrue(prompt.endsWith("现在严格按上述七键 JSON 输出。"));
+
+        String oversized = new String(new char[VlmOcrEngine.OCR_EVIDENCE_MAX_CHARS + 100])
+                .replace('\u0000', 'A');
+        assertEquals(VlmOcrEngine.OCR_EVIDENCE_MAX_CHARS,
+                VlmOcrEngine.sanitizeOcrEvidence(oversized).length());
+    }
+
+    @Test
     public void defaultConfigJson_isValidJsonWithExpectedKeys() {
         String json = VlmOcrEngine.defaultConfigJson();
         assertTrue(json.contains("\"backend_type\":\"cpu\""));

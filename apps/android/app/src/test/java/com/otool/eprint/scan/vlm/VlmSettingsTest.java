@@ -18,6 +18,8 @@ public final class VlmSettingsTest {
         assertEquals(0.0f, settings.frequencyPenalty, 0.001f);
         assertTrue(settings.prompt.contains("manufacturer_part_number"));
         assertTrue(settings.prompt.contains("parameters"));
+        assertTrue(settings.prompt.contains("内部/仓储编码不是型号"));
+        assertTrue(settings.prompt.contains("不得包含 ROHS"));
     }
 
     @Test
@@ -85,6 +87,8 @@ public final class VlmSettingsTest {
     public void legacyAndCustomPromptsCannotRemoveCompleteExtractionSchema() {
         assertEquals(VlmSettings.DEFAULT_PROMPT,
                 VlmSettings.completeExtractionPrompt("Text Recognition:"));
+        assertEquals(VlmSettings.DEFAULT_PROMPT,
+                VlmSettings.completeExtractionPrompt(VlmSettings.LEGACY_EXTRACTION_PROMPT_V1));
         String customized = VlmSettings.completeExtractionPrompt("优先读取左侧文字");
         assertTrue(customized.startsWith("优先读取左侧文字"));
         assertTrue(customized.contains("manufacturer_part_number"));

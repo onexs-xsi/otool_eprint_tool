@@ -2,11 +2,8 @@ package com.otool.eprint.scan.vlm;
 
 /** 可持久化的 GLM-OCR 运行参数。构造时统一校验，避免无效配置传入 native。 */
 public final class VlmSettings {
-    /**
-     * GLM-OCR 官方“信息提取”模式要求严格 JSON。该 schema 覆盖三档模板的全部技术字段，
-     * parameters 继续承载不同器件特有参数，保证一次识别可供全部模板取用。
-     */
-    public static final String DEFAULT_PROMPT =
+    /** v1.5.17~v1.5.26 持久化过的旧默认提示词，用于覆盖安装后的无感迁移。 */
+    static final String LEGACY_EXTRACTION_PROMPT_V1 =
             "请按下列 JSON 格式输出电子元器件标签信息，只输出 JSON：\n"
             + "{\n"
             + "  \"manufacturer_part_number\": \"\",\n"
@@ -20,6 +17,39 @@ public final class VlmSettings {
             + "必须输出全部七个字段；未识别值用空字符串，parameters 无内容用空数组，不得猜测。\n"
             + "specification 汇总关键规格，parameters 列出其余可见技术参数。\n"
             + "忽略数量、订单、批次、追踪、仓储编码及二维码/一维码内容；不要输出 Markdown 或说明。";
+
+    /**
+     * GLM-OCR 官方“信息提取”模式要求严格 JSON。该 schema 覆盖三档模板的全部技术字段，
+     * parameters 继续承载不同器件特有参数，保证一次识别可供全部模板取用。
+     */
+    public static final String DEFAULT_PROMPT =
+            "从图片提取电子元器件标签，只输出一个 JSON 对象。先逐字符核对，再按字段语义归类；"
+            + "不得仅按所在行或字号猜字段。\n"
+            + "字段规则：\n"
+            + "1. manufacturer_part_number：器件厂商原始型号/MPN，保持完整且不得拆分。"
+            + "立创标签中形如“4位数字-字母-字母数字-3位数字”的首行内部/仓储编码不是型号，"
+            + "必须忽略。\n"
+            + "2. lcsc_part_number：立创料号，只接受大写 C 加至少 5 位数字。\n"
+            + "3. category：标签明确写出的器件品类。\n"
+            + "4. specification：电气规格/参数值，例如 12pF ±5% 50V；不得包含 ROHS、"
+            + "数量、封装、型号或换行拼接的其他字段。\n"
+            + "5. package：独立封装代码，例如 0402、SMD5050。\n"
+            + "6. brand：标签明确写出的品牌/厂商。\n"
+            + "7. parameters：仅放除 specification 外、标签明确给出名称和值的技术参数；"
+            + "不得放型号、品牌、品类、封装或内部编码。\n"
+            + "输出格式：\n"
+            + "{\n"
+            + "  \"manufacturer_part_number\": \"\",\n"
+            + "  \"lcsc_part_number\": \"\",\n"
+            + "  \"category\": \"\",\n"
+            + "  \"specification\": \"\",\n"
+            + "  \"package\": \"\",\n"
+            + "  \"brand\": \"\",\n"
+            + "  \"parameters\": [{\"name\": \"\", \"value\": \"\"}]\n"
+            + "}\n"
+            + "必须输出全部七个字段；未识别值用空字符串，parameters 无内容用空数组。"
+            + "不得猜测、改写字符或输出 Markdown/说明。忽略数量、订单、批次、追踪、"
+            + "ROHS/合规文字、内部/仓储编码及二维码/一维码内容。";
     static final String LEGACY_TRANSCRIBE_PROMPT = "Text Recognition:";
 
     public static final String[] BACKEND_VALUES = {"cpu", "opencl", "vulkan"};
@@ -113,7 +143,8 @@ public final class VlmSettings {
     /** 旧“全文转写”配置自动迁移；自定义要求保留，但不能移除固定的完整 JSON schema。 */
     static String completeExtractionPrompt(String prompt) {
         String clean = prompt == null ? "" : prompt.trim();
-        if (clean.isEmpty() || isLegacyTranscribePrompt(clean)) {
+        if (clean.isEmpty() || isLegacyTranscribePrompt(clean)
+                || LEGACY_EXTRACTION_PROMPT_V1.equals(clean)) {
             return DEFAULT_PROMPT;
         }
         if (hasCompleteSchema(clean)) return clean;
