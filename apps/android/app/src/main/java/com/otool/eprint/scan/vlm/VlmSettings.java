@@ -19,10 +19,11 @@ public final class VlmSettings {
             + "忽略数量、订单、批次、追踪、仓储编码及二维码/一维码内容；不要输出 Markdown 或说明。";
 
     /**
-     * GLM-OCR 官方“信息提取”模式要求严格 JSON。该 schema 覆盖三档模板的全部技术字段，
-     * parameters 继续承载不同器件特有参数，保证一次识别可供全部模板取用。
+     * v1.5.17~v1.5.27 的严格 JSON 信息提取默认提示词。真机消融（docs/ocr_optimize_0819.md）
+     * 证明 int4 0.9B 在"图→JSON"单步提取上字段归类系统性失败（0~2/6），降级为遗留配置，
+     * 仅用于覆盖安装后的无感迁移；含完整 schema 的自定义 prompt 仍可走 JSON 模式。
      */
-    public static final String DEFAULT_PROMPT =
+    static final String LEGACY_EXTRACTION_PROMPT_V2 =
             "从图片提取电子元器件标签，只输出一个 JSON 对象。先逐字符核对，再按字段语义归类；"
             + "不得仅按所在行或字号猜字段。\n"
             + "字段规则：\n"
@@ -50,7 +51,15 @@ public final class VlmSettings {
             + "必须输出全部七个字段；未识别值用空字符串，parameters 无内容用空数组。"
             + "不得猜测、改写字符或输出 Markdown/说明。忽略数量、订单、批次、追踪、"
             + "ROHS/合规文字、内部/仓储编码及二维码/一维码内容。";
-    static final String LEGACY_TRANSCRIBE_PROMPT = "Text Recognition:";
+
+    /**
+     * GLM-OCR 官方全文转写任务提示词。v1.5.28 起作为默认：转写是该模型最稳的能力
+     * （真机 12/12 行全对），字段归类交给 LabelTextParser 规则解析，再与 PP-OCR 融合。
+     */
+    public static final String TRANSCRIBE_PROMPT = "Text Recognition:";
+
+    /** 默认提示词：全文转写（两段式链路的第一段）。 */
+    public static final String DEFAULT_PROMPT = TRANSCRIBE_PROMPT;
 
     public static final String[] BACKEND_VALUES = {"cpu", "opencl", "vulkan"};
     // SM-X800（Adreno 730）+ MNN 3.6.1 实测：int4 量化的 GLM-OCR 在 GPU 后端显著慢于 CPU
@@ -89,10 +98,11 @@ public final class VlmSettings {
     }
 
     public static VlmSettings defaults() {
-        // 信息提取包含大量重复 JSON 标点和键名；使用接近官方默认的轻量重复惩罚，
-        // 避免高 presence/frequency penalty 破坏严格 schema。
+        // 转写任务实测工作点（docs/ocr_optimize_0819.md）：1.1 太弱会触发单 token 退化
+        // （"333…"），1.6/0.8/0.4 又会惩罚料号/型号中天然重复的字符（0→O、乱码），
+        // 1.3/0.3/0.2 是文本质量与退化抑制之间的平衡点。
         return new VlmSettings("cpu", 4, "low", "low", 1024, 60,
-                1.1f, 0.0f, 0.0f, DEFAULT_PROMPT);
+                1.3f, 0.3f, 0.2f, DEFAULT_PROMPT);
     }
 
     public long timeoutMs() {
@@ -140,19 +150,28 @@ public final class VlmSettings {
         return 0;
     }
 
-    /** 旧“全文转写”配置自动迁移；自定义要求保留，但不能移除固定的完整 JSON schema。 */
+    /** 旧信息提取 prompt 自动迁移到转写默认；自定义 prompt（含 JSON schema 的）原样保留。 */
     static String completeExtractionPrompt(String prompt) {
         String clean = prompt == null ? "" : prompt.trim();
-        if (clean.isEmpty() || isLegacyTranscribePrompt(clean)
-                || LEGACY_EXTRACTION_PROMPT_V1.equals(clean)) {
+        if (clean.isEmpty() || isLegacyExtractionPrompt(clean)) {
             return DEFAULT_PROMPT;
         }
-        if (hasCompleteSchema(clean)) return clean;
-        return clean + "\n\n" + DEFAULT_PROMPT;
+        return clean;
     }
 
-    static boolean isLegacyTranscribePrompt(String prompt) {
-        return prompt != null && LEGACY_TRANSCRIBE_PROMPT.equalsIgnoreCase(prompt.trim());
+    /** v1.5.17~v1.5.27 持久化过的两代信息提取默认 prompt。 */
+    static boolean isLegacyExtractionPrompt(String prompt) {
+        String clean = prompt == null ? "" : prompt.trim();
+        return LEGACY_EXTRACTION_PROMPT_V1.equals(clean)
+                || LEGACY_EXTRACTION_PROMPT_V2.equals(clean);
+    }
+
+    /**
+     * 是否严格 JSON 信息提取模式：prompt 含完整七键 schema 时按 JSON 解析输出；
+     * 否则（含默认转写 prompt）按全文转写 → 规则解析处理。
+     */
+    public static boolean isJsonExtractionPrompt(String prompt) {
+        return prompt != null && hasCompleteSchema(prompt);
     }
 
     private static boolean hasCompleteSchema(String prompt) {

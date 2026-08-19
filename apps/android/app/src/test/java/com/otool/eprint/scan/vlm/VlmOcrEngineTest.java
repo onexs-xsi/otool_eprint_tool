@@ -87,8 +87,8 @@ public class VlmOcrEngineTest {
         assertTrue(json.contains("\"thread_num\":4"));
         assertTrue(json.contains("\"precision\":\"low\""));
         assertTrue(json.contains("\"max_new_tokens\":1024"));
-        assertTrue(json.contains("\"penalty\":1.1"));
-        assertTrue(json.contains("\"presence_penalty\":0.0"));
+        assertTrue(json.contains("\"penalty\":1.3"));
+        assertTrue(json.contains("\"presence_penalty\":0.3"));
         // 简单括号配平校验，防手抖写坏 JSON。
         assertEquals(json.chars().filter(c -> c == '{').count(),
                 json.chars().filter(c -> c == '}').count());

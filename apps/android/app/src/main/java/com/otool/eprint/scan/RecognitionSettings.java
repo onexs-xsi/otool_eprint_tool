@@ -75,9 +75,12 @@ public final class RecognitionSettings {
     }
 
     public static RecognitionSettings defaults() {
-        // 融合档位默认 5（GLM 为主），与旧版 preferGlmOnConflict=true 行为一致。
+        // 融合档位默认 2（PP 权重大）。v1.5.28 起 GLM 通道改为转写+规则解析，与 PP-OCR
+        // 同源同分（满分都是 100），5 档"GLM 为主"会让 GLM 的转写误读（如 HRE→HREL）
+        // 无条件覆盖 PP 的正确结果；2 档下 GLM 只补漏、置信度翻倍才翻盘（实测见
+        // docs/ocr_optimize_0819.md 回归 2）。
         return new RecognitionSettings(
-                true, true, true, true, true, false, false, true, 5, 20, 60,
+                true, true, true, true, true, false, false, true, 2, 20, 60,
                 true, true, true, true, false, true,
                 true, true, true, true, true, true, true, true);
     }

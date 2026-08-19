@@ -17,7 +17,7 @@ public final class RecognitionSettingsTest {
         assertTrue(settings.vlmEnabled);
         assertTrue(settings.cropToLabel);
         assertTrue(settings.perspectiveRectify);
-        assertEquals(5, settings.fusionWeightLevel);
+        assertEquals(2, settings.fusionWeightLevel);
         assertFalse(settings.maskCodesBeforeVlm);
         assertFalse(settings.experimentalWeakCodeMask);
     }

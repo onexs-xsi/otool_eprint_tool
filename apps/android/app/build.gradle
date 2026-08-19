@@ -12,8 +12,8 @@ android {
         applicationId 'com.otool.eprint'
         minSdk 24
         targetSdk 36
-        versionCode 33
-        versionName '1.5.27'
+        versionCode 34
+        versionName '1.5.28'
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
 
         // 目标机 SM-X800 为 arm64；onnxruntime / MNN native 库只打 arm64-v8a，控制包体。

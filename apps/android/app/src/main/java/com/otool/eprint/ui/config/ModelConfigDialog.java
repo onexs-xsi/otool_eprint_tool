@@ -155,7 +155,8 @@ public final class ModelConfigDialog {
         Spinner backend = addModelSettingSpinner(activity, labelPage, "推理后端",
                 VlmSettings.BACKEND_LABELS,
                 VlmSettings.indexOf(current.backend, VlmSettings.BACKEND_VALUES));
-        EditText threads = addSettingField(activity, labelPage, "CPU 线程数（1-8）",
+        EditText threads = addSettingField(activity, labelPage,
+                "CPU 线程数（1-8；SM-X800 实测 4 最快，超 4 显著变慢）",
                 current.threadCount, true);
         Spinner precision = addModelSettingSpinner(activity, labelPage, "计算精度",
                 VlmSettings.PRECISION_LABELS,
@@ -168,13 +169,14 @@ public final class ModelConfigDialog {
         EditText timeout = addSettingField(activity, labelPage, "单次识别超时秒数（10-300）",
                 current.timeoutSeconds, true);
         EditText repetitionPenalty = addDecimalSettingField(activity, labelPage,
-                "重复惩罚（1.0-3.0；JSON 建议 1.1）", current.repetitionPenalty);
+                "重复惩罚（1.0-3.0；转写建议 1.3）", current.repetitionPenalty);
         EditText presencePenalty = addDecimalSettingField(activity, labelPage,
-                "出现惩罚（0.0-2.0；JSON 建议 0.0）", current.presencePenalty);
+                "出现惩罚（0.0-2.0；转写建议 0.3）", current.presencePenalty);
         EditText frequencyPenalty = addDecimalSettingField(activity, labelPage,
-                "频率惩罚（0.0-2.0；JSON 建议 0.0）", current.frequencyPenalty);
+                "频率惩罚（0.0-2.0；转写建议 0.2）", current.frequencyPenalty);
         EditText prompt = addSettingField(activity, labelPage,
-                "信息提取提示词（自动补齐完整 JSON schema）", current.prompt, false);
+                "VLM 提示词（默认 Text Recognition: 转写；含完整七键 schema 则走 JSON 提取）",
+                current.prompt, false);
 
         addConfigSection(activity, qrPage, "二维码识别");
         CheckBox qrEnabled = addConfigCheck(activity, qrPage, "启用二维码识别", recognition.qrEnabled);

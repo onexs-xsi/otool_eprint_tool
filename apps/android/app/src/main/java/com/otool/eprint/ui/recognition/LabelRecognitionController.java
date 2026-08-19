@@ -30,6 +30,7 @@ import com.otool.eprint.scan.LabelFrameProcessor;
 import com.otool.eprint.scan.LabelTextParser;
 import com.otool.eprint.scan.RecognitionSettings;
 import com.otool.eprint.scan.ScanInputMode;
+import com.otool.eprint.scan.VlmTranscriptionParser;
 import com.otool.eprint.scan.ocr.LabelOcrEngine;
 import com.otool.eprint.scan.ocr.OcrLine;
 import com.otool.eprint.scan.ocr.OcrResult;
@@ -289,7 +290,7 @@ public final class LabelRecognitionController {
         activity.runOnUiThread(() -> {
             setScanButtonBusy(true);
             Button button = findScanButton();
-            if (button != null) button.setText("VLM 信息提取中…");
+            if (button != null) button.setText("VLM 识别中…");
             showProcessingFrame(structuredInput, maskingEnabled
                     ? "4/5 · GLM 输入：精确遮盖 " + maskedCount + " 处码区"
                     : "4/5 · GLM 输入：码区遮盖未启用");
@@ -301,16 +302,21 @@ public final class LabelRecognitionController {
             if (protectedCount > 0) {
                 appendVlmNote("另有 " + protectedCount + " 个候选与有效文字重叠，已取消遮盖");
             }
-            appendVlmNote("VLM（GLM-OCR 0.9B）信息提取中，通常需 5~60 秒…");
+            appendVlmNote("VLM（GLM-OCR 0.9B）识别中，通常需 5~60 秒…");
         });
         final StringBuilder streamed = new StringBuilder();
         final AtomicReference<VlmResult> vlmRef = new AtomicReference<>();
+        // 流式刷新节流：每 token 都 post 到 UI 线程会淹没消息队列，300ms 一刷足够观感流畅。
+        final long[] lastUiRefresh = {0L};
         Thread vlmThread = new Thread(() -> vlmRef.set(vlmOcrEngine.recognize(
                 structuredInput, activity.getCacheDir(), cascade.fullText(), chunk -> {
                     streamed.append(chunk);
+                    long now = System.currentTimeMillis();
+                    if (now - lastUiRefresh[0] < 300L) return false;
+                    lastUiRefresh[0] = now;
                     final String partial = streamed.toString();
                     activity.runOnUiThread(() -> showVlmText(cascade, partial,
-                            "VLM（GLM-OCR 0.9B · MNN）信息提取中…"));
+                            "VLM（GLM-OCR 0.9B · MNN）识别中…"));
                     return false;
                 })), "vlm-ocr");
         vlmThread.start();
@@ -331,13 +337,20 @@ public final class LabelRecognitionController {
         }
         final VlmResult vlm = vlmRef.get();
         final boolean vlmTimedOut = timedOut && vlm == null;
+        final boolean jsonMode = vlmOcrEngine.isJsonExtractionMode();
         ComponentRecord parsed = null;
         String parseError = null;
         if (vlm != null && vlm.isOk()) {
-            try {
-                parsed = GlmInformationExtractionParser.parse(vlm.text, cascadeRecord);
-            } catch (org.json.JSONException invalidJson) {
-                parseError = invalidJson.getMessage();
+            if (jsonMode) {
+                try {
+                    parsed = GlmInformationExtractionParser.parse(vlm.text, cascadeRecord);
+                } catch (org.json.JSONException invalidJson) {
+                    parseError = invalidJson.getMessage();
+                }
+            } else {
+                // 默认转写模式：转写文本 → 规则归类（VLM 只负责读字，字段归属交给规则）。
+                parsed = VlmTranscriptionParser.parse(vlm.text);
+                if (parsed == null) parseError = "转写文本为空或均为退化字符";
             }
         }
         final ComponentRecord extractedRecord = parsed;
@@ -355,15 +368,16 @@ public final class LabelRecognitionController {
                 toast("VLM 识别失败");
                 finishLabelProcessing();
             } else {
-                String header = "VLM（GLM-OCR 0.9B · MNN）信息提取 JSON"
+                String header = "VLM（GLM-OCR 0.9B · MNN）" + (jsonMode ? "信息提取 JSON" : "文字转写")
                         + (vlmOcrEngine.loadMs() >= 0 ? " · 加载 " + vlmOcrEngine.loadMs() + "ms" : "")
                         + (maskingEnabled ? " · 码区遮盖 " + maskedCount : " · 码区遮盖关闭")
                         + " · " + vlm.timingSummary()
                         + (vlm.stopped ? " · 超时截断" : "");
                 showVlmText(cascade, vlm.text, header);
                 if (extractedRecord == null) {
-                    appendVlmNote("VLM JSON 校验失败，未写入模板：" + extractionError);
-                    toast("VLM 信息提取格式不完整");
+                    appendVlmNote((jsonMode ? "VLM JSON 校验失败" : "VLM 转写结果无效")
+                            + "，未写入模板：" + extractionError);
+                    toast(jsonMode ? "VLM 信息提取格式不完整" : "VLM 转写结果不可用");
                     finishLabelProcessing();
                 } else {
                     ComponentRecord finalRecord = ComponentRecordFusion.merge(
@@ -374,7 +388,7 @@ public final class LabelRecognitionController {
                                     + " 档）· "
                                     + (maskingEnabled ? "码区遮盖 " + maskedCount : "码区遮盖关闭")
                                     + " · " + vlm.timingSummary());
-                    toast("VLM 信息提取完成：" + vlm.totalMs + "ms");
+                    toast("VLM 识别完成：" + vlm.totalMs + "ms");
                 }
             }
         });

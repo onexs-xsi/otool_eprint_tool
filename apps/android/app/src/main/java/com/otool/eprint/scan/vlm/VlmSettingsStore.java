@@ -13,21 +13,24 @@ public final class VlmSettingsStore {
         VlmSettings defaults = VlmSettings.defaults();
         SharedPreferences values = context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE);
         String storedPrompt = values.getString("prompt", defaults.prompt);
-        // “全文转写”遗留参数的高惩罚会破坏重复 JSON 标点；迁移到信息提取时只重置
-        // 采样惩罚，线程/后端/精度/超时等用户配置继续保留。
-        boolean migratingTranscribe = VlmSettings.isLegacyTranscribePrompt(storedPrompt);
+        // 旧信息提取 prompt（v1.5.17~v1.5.27）迁移到转写模式时，同步把采样惩罚重置为
+        // 转写工作点：旧默认 1.1/0/0 在转写任务上会触发单 token 退化（"333…"）。
+        // 线程数一并重置：SM-X800 实测 thread_num>4 显著更慢（8 线程 decode 慢 4.2×，
+        // 见 docs/ocr_optimize_0819.md 性能节）。后端/精度/超时等用户配置继续保留。
+        boolean migratingExtraction = VlmSettings.isLegacyExtractionPrompt(storedPrompt);
         return new VlmSettings(
                 values.getString("backend", defaults.backend),
-                values.getInt("thread_count", defaults.threadCount),
+                migratingExtraction ? defaults.threadCount
+                        : values.getInt("thread_count", defaults.threadCount),
                 values.getString("precision", defaults.precision),
                 values.getString("memory", defaults.memory),
                 values.getInt("max_new_tokens", defaults.maxNewTokens),
                 values.getInt("timeout_seconds", defaults.timeoutSeconds),
-                migratingTranscribe ? defaults.repetitionPenalty
+                migratingExtraction ? defaults.repetitionPenalty
                         : values.getFloat("repetition_penalty", defaults.repetitionPenalty),
-                migratingTranscribe ? defaults.presencePenalty
+                migratingExtraction ? defaults.presencePenalty
                         : values.getFloat("presence_penalty", defaults.presencePenalty),
-                migratingTranscribe ? defaults.frequencyPenalty
+                migratingExtraction ? defaults.frequencyPenalty
                         : values.getFloat("frequency_penalty", defaults.frequencyPenalty),
                 storedPrompt);
     }

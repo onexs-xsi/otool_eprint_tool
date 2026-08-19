@@ -2,6 +2,8 @@ package com.otool.eprint.scan.vlm;
 
 import android.content.Context;
 import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Color;
 import android.util.Log;
 
 import java.io.File;
@@ -30,8 +32,8 @@ public final class VlmOcrEngine {
     static final int OCR_EVIDENCE_MAX_CHARS = 2400;
 
     public static final String MODEL_DIR_NAME = "glm-ocr-mnn";
-    /** GLM-OCR 官方“信息提取”场景使用的完整严格 JSON 提示词。 */
-    public static final String INFORMATION_EXTRACTION_PROMPT = VlmSettings.DEFAULT_PROMPT;
+    /** 严格 JSON 信息提取提示词（遗留模式；v1.5.28 起默认走 {@link VlmSettings#TRANSCRIBE_PROMPT} 转写）。 */
+    public static final String INFORMATION_EXTRACTION_PROMPT = VlmSettings.LEGACY_EXTRACTION_PROMPT_V2;
 
     /** 加载必需文件（缺一则视为未部署）。 */
     private static final String[] REQUIRED_FILES = {
@@ -234,17 +236,23 @@ public final class VlmOcrEngine {
             return VlmResult.failure(initError != null ? initError : "模型未加载", 0);
         }
         File imageFile = new File(tempDir, "vlm_input.png");
+        // MNN 端按 image_size 方形缩放输入（docs/ocr_optimize_0819.md），先补方避免宽高比失真。
+        Bitmap input = toSquareLetterbox(frame);
         try (FileOutputStream out = new FileOutputStream(imageFile)) {
-            if (!frame.compress(Bitmap.CompressFormat.PNG, 100, out)) {
+            if (!input.compress(Bitmap.CompressFormat.PNG, 100, out)) {
                 return VlmResult.failure("图片编码失败",
                         System.currentTimeMillis() - start);
             }
         } catch (IOException error) {
             return VlmResult.failure("临时图写入失败：" + error.getMessage(),
                     System.currentTimeMillis() - start);
+        } finally {
+            if (input != frame) input.recycle();
         }
         stopRequested = false;
-        String prompt = buildInformationExtractionPrompt(imageFile, settings.prompt, ocrEvidence);
+        // 转写模式下实测 <ocr_reference> 证据注入有害（全空输出），仅 JSON 提取模式附带。
+        String evidence = VlmSettings.isJsonExtractionPrompt(settings.prompt) ? ocrEvidence : "";
+        String prompt = buildInformationExtractionPrompt(imageFile, settings.prompt, evidence);
         Log.i(TAG, "submit prompt: " + prompt);
         StringBuilder observed = new StringBuilder();
         boolean[] degenerate = {false};
@@ -278,6 +286,27 @@ public final class VlmOcrEngine {
                 longValue(raw, "vision_time") / 1000, longValue(raw, "prefill_time") / 1000,
                 longValue(raw, "decode_time") / 1000, totalMs,
                 raw.containsKey("stopped"), null);
+    }
+
+    /**
+     * 白底补方（letterbox）：输入已是方形时原样返回，否则居中贴到白色正方形画布。
+     * MNN 视觉端会把任意输入缩成 image_size×image_size 方形，预补方可避免几何失真。
+     */
+    static Bitmap toSquareLetterbox(Bitmap src) {
+        int width = src.getWidth();
+        int height = src.getHeight();
+        if (width == height || width <= 0 || height <= 0) return src;
+        int side = Math.max(width, height);
+        Bitmap out = Bitmap.createBitmap(side, side, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(out);
+        canvas.drawColor(Color.WHITE);
+        canvas.drawBitmap(src, (side - width) / 2f, (side - height) / 2f, null);
+        return out;
+    }
+
+    /** 当前配置是否严格 JSON 信息提取模式（否则为全文转写模式）。 */
+    public synchronized boolean isJsonExtractionMode() {
+        return VlmSettings.isJsonExtractionPrompt(settings.prompt);
     }
 
     private static long longValue(Map<String, Object> map, String key) {

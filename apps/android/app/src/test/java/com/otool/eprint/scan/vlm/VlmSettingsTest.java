@@ -1,6 +1,7 @@
 package com.otool.eprint.scan.vlm;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
@@ -13,13 +14,11 @@ public final class VlmSettingsTest {
         assertEquals(4, settings.threadCount);
         assertEquals(1024, settings.maxNewTokens);
         assertEquals(60_000L, settings.timeoutMs());
-        assertEquals(1.1f, settings.repetitionPenalty, 0.001f);
-        assertEquals(0.0f, settings.presencePenalty, 0.001f);
-        assertEquals(0.0f, settings.frequencyPenalty, 0.001f);
-        assertTrue(settings.prompt.contains("manufacturer_part_number"));
-        assertTrue(settings.prompt.contains("parameters"));
-        assertTrue(settings.prompt.contains("内部/仓储编码不是型号"));
-        assertTrue(settings.prompt.contains("不得包含 ROHS"));
+        assertEquals(1.3f, settings.repetitionPenalty, 0.001f);
+        assertEquals(0.3f, settings.presencePenalty, 0.001f);
+        assertEquals(0.2f, settings.frequencyPenalty, 0.001f);
+        assertEquals(VlmSettings.TRANSCRIBE_PROMPT, settings.prompt);
+        assertFalse(VlmSettings.isJsonExtractionPrompt(settings.prompt));
     }
 
     @Test
@@ -84,14 +83,28 @@ public final class VlmSettingsTest {
     }
 
     @Test
-    public void legacyAndCustomPromptsCannotRemoveCompleteExtractionSchema() {
+    public void legacyExtractionPromptsMigrateToTranscribeDefault() {
         assertEquals(VlmSettings.DEFAULT_PROMPT,
-                VlmSettings.completeExtractionPrompt("Text Recognition:"));
+                VlmSettings.completeExtractionPrompt(""));
+        assertEquals(VlmSettings.DEFAULT_PROMPT,
+                VlmSettings.completeExtractionPrompt("   "));
         assertEquals(VlmSettings.DEFAULT_PROMPT,
                 VlmSettings.completeExtractionPrompt(VlmSettings.LEGACY_EXTRACTION_PROMPT_V1));
-        String customized = VlmSettings.completeExtractionPrompt("优先读取左侧文字");
-        assertTrue(customized.startsWith("优先读取左侧文字"));
-        assertTrue(customized.contains("manufacturer_part_number"));
-        assertTrue(customized.contains("parameters"));
+        assertEquals(VlmSettings.DEFAULT_PROMPT,
+                VlmSettings.completeExtractionPrompt(VlmSettings.LEGACY_EXTRACTION_PROMPT_V2));
+        assertTrue(VlmSettings.isLegacyExtractionPrompt(VlmSettings.LEGACY_EXTRACTION_PROMPT_V1));
+        assertTrue(VlmSettings.isLegacyExtractionPrompt(VlmSettings.LEGACY_EXTRACTION_PROMPT_V2));
+        assertFalse(VlmSettings.isLegacyExtractionPrompt(VlmSettings.TRANSCRIBE_PROMPT));
+    }
+
+    @Test
+    public void customPromptsArePreservedAndDetectJsonMode() {
+        assertEquals("Text Recognition:",
+                VlmSettings.completeExtractionPrompt("Text Recognition:"));
+        assertEquals("优先读取左侧文字",
+                VlmSettings.completeExtractionPrompt("优先读取左侧文字"));
+        assertFalse(VlmSettings.isJsonExtractionPrompt("优先读取左侧文字"));
+        assertTrue(VlmSettings.isJsonExtractionPrompt(VlmSettings.LEGACY_EXTRACTION_PROMPT_V2));
+        assertFalse(VlmSettings.isJsonExtractionPrompt(null));
     }
 }
