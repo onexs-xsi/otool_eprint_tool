@@ -45,7 +45,7 @@ public class ComponentLabelFactoryTest {
             assertTrue("元素 " + element.id + " 估算宽度 " + estimatedWidthMm(element)
                             + " 超过可用宽度 " + element.widthMm,
                     estimatedWidthMm(element) <= element.widthMm + 0.01f);
-            assertTrue(element.fontSizePt >= 4.5f);
+            assertTrue(element.fontSizePt >= ComponentLabelFactory.FIT_HARD_MIN_PT);
         }
     }
 
@@ -89,12 +89,12 @@ public class ComponentLabelFactoryTest {
         assertNotNull(label);
         assertNotNull(value);
         assertEquals(prefix, label.text);
-        // 结构断言：前缀列从左边距起、值列紧跟其后（间隙 0.15mm）、右抵右边距
+        // 结构断言：前缀列从左边距起、值列紧跟其后（间隙 0.4mm）、右抵右边距
         assertEquals(0.3f, label.xMm, 0.001f);
         assertTrue(label.widthMm >= 3.0f);
         assertTrue(label.widthMm <= 5.0f);
         assertEquals(TextElement.ALIGN_RIGHT, label.alignment);
-        assertEquals(label.xMm + label.widthMm + 0.15f, value.xMm, 0.001f);
+        assertEquals(label.xMm + label.widthMm + 0.4f, value.xMm, 0.001f);
         assertEquals(document.widthMm - value.xMm - 0.3f, value.widthMm, 0.001f);
         assertEquals(label.yMm, value.yMm, 0.001f);
         // 元素高度为真实行高（不再是默认 8mm），供预览裁切与选择框贴字使用
@@ -131,6 +131,20 @@ public class ComponentLabelFactoryTest {
         assertEquals("h", headline.format);
         // 25×15 简洁 4 行 pitch≈3.5mm ≥2.8 → 行间横线也补齐
         assertNotNull(document.find("component_sep_r2"));
+    }
+
+    @Test
+    public void separatorsCanBeTurnedOffViaTemplateOption() {
+        LabelDocument withLines = ComponentLabelFactory.create(mlccRecord(), 203, 25f, 15f,
+                ComponentTemplate.COMPACT, true, true, false);
+        LabelDocument noLines = ComponentLabelFactory.create(mlccRecord(), 203, 25f, 15f,
+                ComponentTemplate.COMPACT, true, false,
+                ComponentFieldSelection.defaults(), false);
+        assertTrue(countLineElements(withLines) > 0);
+        assertEquals(0, countLineElements(noLines));
+        assertEquals(8, countTextElements(noLines));
+        assertSingleLineFits(noLines);
+        assertValueRowsDoNotOverlap(noLines);
     }
 
     @Test

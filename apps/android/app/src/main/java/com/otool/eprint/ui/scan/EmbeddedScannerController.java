@@ -369,7 +369,8 @@ public final class EmbeddedScannerController {
         LabelDocument created = ComponentLabelFactory.create(record, host.selectedProfile().dpi,
                 width, height,
                 templateController.componentTemplate(), templateController.templateBoldHeadline(),
-                templateController.templateLargeFont(), templateController.templateFields());
+                templateController.templateLargeFont(), templateController.templateFields(),
+                templateController.templateSeparators());
         host.setDocument(created);
         host.labelCanvas().setDocument(created);
         // 不默认选中首元素：选择框等用户点按后再出现。

@@ -85,6 +85,7 @@ public final class OpenCVLabelRectifier {
             // 多通道按序尝试，第一个产出有效四边形的通道胜出。
             DetectionResult detection = detectOtsu(blurred, false);
             if (detection == null) detection = detectOtsu(blurred, true);
+            if (detection == null) detection = detectWhiteCardStrict(analysis);
             if (detection == null) detection = detectWhiteCard(analysis);
             if (detection == null) detection = detectCanny(blurred);
             if (detection == null) detection = detectAdaptive(blurred);
@@ -204,6 +205,44 @@ public final class OpenCVLabelRectifier {
         }
     }
 
+    /**
+     * 严格白卡通道：V≥200、S<80 只保留"纸白"区域。宽松白卡（V≥140）会把塑料袋高光、
+     * 米色桌面一并连通，导致整张 ROI 粘成一块、各通道都逼近不出四边形（2026-08-19 电阻
+     * 标签实拍复现）。严格阈值下标签卡独立成块；先走标准四边形逼近，不出四边形时直接
+     * 采纳最大分量的 minAreaRect 四角（倾斜卡片的标准姿态，比放弃矫正强得多）。
+     */
+    private static DetectionResult detectWhiteCardStrict(Mat analysisRgba) {
+        Mat rgb = new Mat();
+        Mat hsv = new Mat();
+        Mat mask = new Mat();
+        Mat opened = new Mat();
+        Mat closed = new Mat();
+        Mat openKernel = null;
+        Mat closeKernel = null;
+        try {
+            Imgproc.cvtColor(analysisRgba, rgb, Imgproc.COLOR_RGBA2RGB);
+            Imgproc.cvtColor(rgb, hsv, Imgproc.COLOR_RGB2HSV);
+            Core.inRange(hsv, new Scalar(0, 0, 200), new Scalar(180, 80, 255), mask);
+            int openSize = Math.max(3, Math.min(mask.cols(), mask.rows()) / 130) | 1;
+            openKernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT,
+                    new Size(openSize, openSize));
+            Imgproc.morphologyEx(mask, opened, Imgproc.MORPH_OPEN, openKernel);
+            closeKernel = closeKernel(mask);
+            Imgproc.morphologyEx(opened, closed, Imgproc.MORPH_CLOSE, closeKernel);
+            DetectionResult quad = findQuad(closed, "white-card-strict");
+            if (quad != null) return quad;
+            return minAreaRectQuad(closed, "white-card-strict-minrect");
+        } finally {
+            rgb.release();
+            hsv.release();
+            mask.release();
+            opened.release();
+            closed.release();
+            if (openKernel != null) openKernel.release();
+            if (closeKernel != null) closeKernel.release();
+        }
+    }
+
     /** Canny 边缘通道：亮度相近的标签卡与白色软管仍能被边缘分开。 */
     private static DetectionResult detectCanny(Mat blurred) {
         Mat edges = new Mat();
@@ -264,46 +303,54 @@ public final class OpenCVLabelRectifier {
                     Imgproc.THRESH_BINARY | Imgproc.THRESH_OTSU);
             kernel = closeKernel(blurred);
             Imgproc.morphologyEx(binary, closed, Imgproc.MORPH_CLOSE, kernel);
-            List<MatOfPoint> contours = new ArrayList<>();
-            Mat hierarchy = new Mat();
-            Imgproc.findContours(closed, contours, hierarchy,
-                    Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE);
-            hierarchy.release();
-            try {
-                double imageArea = closed.cols() * (double) closed.rows();
-                MatOfPoint largest = null;
-                double largestArea = 0;
-                for (MatOfPoint contour : contours) {
-                    double area = Imgproc.contourArea(contour);
-                    if (area > largestArea) {
-                        largestArea = area;
-                        largest = contour;
-                    }
-                }
-                if (largest == null || largestArea < imageArea * MIN_AREA_RATIO
-                        || largestArea > imageArea * MAX_AREA_RATIO) {
-                    Log.d(TAG, "minAreaRect 兜底无有效轮廓（轮廓数=" + contours.size() + "）");
-                    return null;
-                }
-                float[] corners = minAreaRectCorners(largest);
-                if (!isValidApproxQuad(corners, closed.cols(), closed.rows())) {
-                    Log.d(TAG, "minAreaRect 兜底四边形校验失败");
-                    return null;
-                }
-                double ratio = quadArea(corners) / imageArea;
-                if (ratio > MAX_FALLBACK_AREA_RATIO) {
-                    Log.d(TAG, "minAreaRect 兜底四边形面积占比过高（"
-                            + String.format(Locale.US, "%.3f", ratio) + "），视为整幅粘连，放弃");
-                    return null;
-                }
-                return new DetectionResult(corners, "minAreaRect", ratio);
-            } finally {
-                for (MatOfPoint contour : contours) contour.release();
-            }
+            return minAreaRectQuad(closed, "minAreaRect");
         } finally {
             binary.release();
             closed.release();
             if (kernel != null) kernel.release();
+        }
+    }
+
+    /**
+     * 二值图最大连通轮廓的 minAreaRect 四角；面积占比超出合理区间或四边形校验失败
+     * 时返回 null（超出说明亮区已粘成一整块，拉出的是整幅 ROI）。
+     */
+    private static DetectionResult minAreaRectQuad(Mat closed, String channel) {
+        List<MatOfPoint> contours = new ArrayList<>();
+        Mat hierarchy = new Mat();
+        Imgproc.findContours(closed, contours, hierarchy,
+                Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE);
+        hierarchy.release();
+        try {
+            double imageArea = closed.cols() * (double) closed.rows();
+            MatOfPoint largest = null;
+            double largestArea = 0;
+            for (MatOfPoint contour : contours) {
+                double area = Imgproc.contourArea(contour);
+                if (area > largestArea) {
+                    largestArea = area;
+                    largest = contour;
+                }
+            }
+            if (largest == null || largestArea < imageArea * MIN_AREA_RATIO
+                    || largestArea > imageArea * MAX_AREA_RATIO) {
+                Log.d(TAG, channel + " 无有效轮廓（轮廓数=" + contours.size() + "）");
+                return null;
+            }
+            float[] corners = minAreaRectCorners(largest);
+            if (!isValidApproxQuad(corners, closed.cols(), closed.rows())) {
+                Log.d(TAG, channel + " 四边形校验失败");
+                return null;
+            }
+            double ratio = quadArea(corners) / imageArea;
+            if (ratio > MAX_FALLBACK_AREA_RATIO) {
+                Log.d(TAG, channel + " 四边形面积占比过高（"
+                        + String.format(Locale.US, "%.3f", ratio) + "），视为整幅粘连，放弃");
+                return null;
+            }
+            return new DetectionResult(corners, channel, ratio);
+        } finally {
+            for (MatOfPoint contour : contours) contour.release();
         }
     }
 

@@ -19,6 +19,7 @@ import com.otool.eprint.model.TextElement;
 import com.otool.eprint.render.BarcodeRasterizer;
 import com.otool.eprint.render.IconCatalog;
 import com.otool.eprint.render.ImageElementRenderer;
+import com.otool.eprint.render.TextFitUtil;
 
 public final class LabelCanvasView extends View {
     public interface Listener {
@@ -186,8 +187,11 @@ public final class LabelCanvasView extends View {
     private float drawText(Canvas canvas, String content, TextElement element, float left, float top) {
         int width = Math.max(1, Math.round(element.widthMm * pixelsPerMm));
         textPaint.setColor(0xFF102F29);
-        textPaint.setTextSize(Math.max(dp(7), element.fontSizePt * 25.4f / 72f * pixelsPerMm));
+        float basePx = Math.max(dp(7), element.fontSizePt * 25.4f / 72f * pixelsPerMm);
+        textPaint.setTextSize(basePx);
         textPaint.setFakeBoldText(element.bold);
+        // 单行文本实测缩字兜底：型号等长字段永远不折行（工厂估算偏乐观时由这里收口）
+        TextFitUtil.fitSingleLine(textPaint, content, basePx, width, dp(5));
 
         StaticLayout layout = StaticLayout.Builder.obtain(content, 0, content.length(), textPaint, width)
                 .setAlignment(toAlignment(element.alignment))

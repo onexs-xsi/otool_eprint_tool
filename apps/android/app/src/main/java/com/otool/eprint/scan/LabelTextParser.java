@@ -61,6 +61,7 @@ public final class LabelTextParser {
         String vendor = "";
         String category = "";
         String model = "";
+        int specUnitCount = 0;
 
         for (String original : texts) {
             String line = correctCommonMisreads(original.trim());
@@ -97,13 +98,32 @@ public final class LabelTextParser {
                 // 以 ASCII 字母开头的是厂商（HRE(芯声)），中文开头的是品类（贴片电容(MLCC)）。
                 if (Character.isLetter(line.charAt(0)) && line.charAt(0) < 0x80) {
                     if (vendor.isEmpty()) vendor = line;
-                } else if (category.isEmpty() && CHINESE_CATEGORY_HINT.matcher(line).find()) {
-                    category = line;
+                } else if (CHINESE_CATEGORY_HINT.matcher(line).find()) {
+                    Matcher hint = CHINESE_CATEGORY_HINT.matcher(line);
+                    hint.find();
+                    if (UNIT_VALUE.matcher(line).find()) {
+                        // 混合行（如 "厚膜电阻 0Ω 333.333mW"）：中文段作品类，
+                        // 单位段继续作规格候选，不再整行当归品类后丢弃规格。
+                        if (category.isEmpty()) category = line.substring(0, hint.end());
+                        String specPart = line.substring(hint.end()).trim();
+                        int units = countUnitValues(specPart);
+                        if (!specPart.isEmpty() && units > specUnitCount) {
+                            spec = specPart;
+                            specUnitCount = units;
+                        }
+                    } else if (category.isEmpty()) {
+                        category = line;
+                    }
                 }
                 continue;
             }
             if (TOLERANCE.matcher(line).find() || UNIT_VALUE.matcher(line).find()) {
-                if (spec.isEmpty()) spec = line;
+                // 规格候选取单位值更多的一行（如 "0Ω 333.333mW" 胜过孤立的 "3.00mW" 残读）。
+                int units = countUnitValues(line);
+                if (spec.isEmpty() || units > specUnitCount) {
+                    spec = line;
+                    specUnitCount = units;
+                }
                 Matcher pkg = PACKAGE_CODE.matcher(line);
                 if (packageCode.isEmpty() && pkg.find()) packageCode = pkg.group();
                 continue;
@@ -231,6 +251,18 @@ public final class LabelTextParser {
         if (model.isEmpty()) missing.append("型号 ");
         return missing.length() == 0 ? ""
                 : "缺少" + missing.toString().trim() + "，打印前请人工核对";
+    }
+
+    /** 一行中命中的单位值个数（规格行优先级依据）。 */
+    private static int countUnitValues(String line) {
+        int count = 0;
+        Matcher matcher = UNIT_VALUE.matcher(line);
+        int from = 0;
+        while (matcher.find(from)) {
+            count++;
+            from = matcher.end();
+        }
+        return count;
     }
 
     private static int parseInt(String value) {

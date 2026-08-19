@@ -173,8 +173,11 @@ public final class LabelBitmapRenderer {
 
         TextPaint paint = new TextPaint(TextPaint.ANTI_ALIAS_FLAG | TextPaint.SUBPIXEL_TEXT_FLAG);
         paint.setColor(Color.BLACK);
-        paint.setTextSize(Math.max(1f, element.fontSizePt * document.dpi / 72f));
+        float basePx = Math.max(1f, element.fontSizePt * document.dpi / 72f);
+        paint.setTextSize(basePx);
         paint.setFakeBoldText(element.bold);
+        // 与预览一致的实测缩字兜底：打印位图里的长型号同样不折行
+        TextFitUtil.fitSingleLine(paint, content, basePx, width, Math.max(1f, basePx * 0.4f));
 
         StaticLayout layout = StaticLayout.Builder.obtain(content, 0, content.length(), paint, width)
                 .setAlignment(toAlignment(element.alignment))

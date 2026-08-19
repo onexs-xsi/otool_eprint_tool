@@ -236,8 +236,10 @@ public final class VlmOcrEngine {
             return VlmResult.failure(initError != null ? initError : "模型未加载", 0);
         }
         File imageFile = new File(tempDir, "vlm_input.png");
-        // MNN 端按 image_size 方形缩放输入（docs/ocr_optimize_0819.md），先补方避免宽高比失真。
-        Bitmap input = toSquareLetterbox(frame);
+        // 先裁掉码区（QR/一维码不承载字段文本，却浪费视觉 token 预算并干扰阅读顺序），
+        // 再白底补方：MNN 端按 image_size 方形缩放输入（docs/ocr_optimize_0819.md）。
+        Bitmap cropped = VlmInputCropper.cropToTextRegion(frame);
+        Bitmap input = toSquareLetterbox(cropped);
         try (FileOutputStream out = new FileOutputStream(imageFile)) {
             if (!input.compress(Bitmap.CompressFormat.PNG, 100, out)) {
                 return VlmResult.failure("图片编码失败",
@@ -247,7 +249,8 @@ public final class VlmOcrEngine {
             return VlmResult.failure("临时图写入失败：" + error.getMessage(),
                     System.currentTimeMillis() - start);
         } finally {
-            if (input != frame) input.recycle();
+            if (input != cropped) input.recycle();
+            if (cropped != frame) cropped.recycle();
         }
         stopRequested = false;
         // 转写模式下实测 <ocr_reference> 证据注入有害（全空输出），仅 JSON 提取模式附带。

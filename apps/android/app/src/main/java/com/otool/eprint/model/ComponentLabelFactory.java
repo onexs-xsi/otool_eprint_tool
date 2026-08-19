@@ -30,21 +30,30 @@ public final class ComponentLabelFactory {
                         defaults.parameters, defaults.supplierPartNumber));
     }
 
-    /**
-     * 按标签实际尺寸直接排版（不再是 25×15 基准 + 事后缩放）：行距由可用高度决定，
-     * 空间不足时按字段优先级取舍，并补分隔线让版面规整。
-     */
     public static LabelDocument create(ComponentRecord record, int dpi,
                                        float widthMm, float heightMm,
                                        ComponentTemplate template, boolean boldHeadline,
                                        boolean largeFont, ComponentFieldSelection fields) {
+        return create(record, dpi, widthMm, heightMm, template, boldHeadline, largeFont,
+                fields, true);
+    }
+
+    /**
+     * 按标签实际尺寸直接排版（不再是 25×15 基准 + 事后缩放）：行距由可用高度决定，
+     * 空间不足时按字段优先级取舍；separators 控制是否输出分隔线（模板配置项）。
+     */
+    public static LabelDocument create(ComponentRecord record, int dpi,
+                                       float widthMm, float heightMm,
+                                       ComponentTemplate template, boolean boldHeadline,
+                                       boolean largeFont, ComponentFieldSelection fields,
+                                       boolean separators) {
         LabelDocument document = new LabelDocument();
         document.widthMm = widthMm;
         document.heightMm = heightMm;
         document.dpi = dpi;
         document.elements.clear();
         List<FieldRow> rows = templateRows(template, record, boldHeadline, fields);
-        layoutRows(document, rows, largeFont);
+        layoutRows(document, rows, largeFont, separators);
         document.normalize();
         return document;
     }
@@ -127,7 +136,7 @@ public final class ComponentLabelFactory {
      * 行数超出最小行距时从低优先级字段开始取舍，直到放得下为止。
      */
     private static void layoutRows(LabelDocument document, List<FieldRow> rows,
-                                   boolean largeFont) {
+                                   boolean largeFont, boolean separators) {
         float widthMm = document.widthMm;
         float heightMm = document.heightMm;
         float marginX = Math.max(0.25f, widthMm * 0.012f);
@@ -150,7 +159,8 @@ public final class ComponentLabelFactory {
         float prefixNeedMm = estimatedMm("参数：", prefixPt, false) + 0.15f;
         float prefixW = LabelDocument.clamp(Math.max(widthMm * 0.17f, prefixNeedMm),
                 3.0f, Math.min(widthMm * 0.34f, 5.0f));
-        float gapMm = 0.15f;
+        // 列间隙 0.4mm：竖线居中后，前缀与值文字各留 0.2mm 呼吸位，不贴线。
+        float gapMm = 0.4f;
         float valueX = marginX + prefixW + gapMm;
         float valueW = widthMm - valueX - marginX;
         float rowH = pitch * 0.95f;
@@ -162,7 +172,9 @@ public final class ComponentLabelFactory {
             document.elements.add(text(row.id, row.value, valueX, y,
                     valueW, rowH, valuePt, row.boldValue, TextElement.ALIGN_LEFT));
         }
-        addSeparators(document, kept.size(), marginX, marginY, valueX - gapMm / 2f, pitch);
+        if (separators) {
+            addSeparators(document, kept.size(), marginX, marginY, valueX - gapMm / 2f, pitch);
+        }
     }
 
     /**
@@ -228,10 +240,11 @@ public final class ComponentLabelFactory {
         TextElement element = new TextElement();
         element.id = id;
         // 长料号自动缩字，保证单行不折行（折行会让各行在小标签上重叠）；
-        // 缩到下限仍超宽时截断末尾，保住型号等关键身份字段。
+        // 舒适下限 4.5pt 之下还留 4.0pt 硬下限（203 DPI 约 11px），缩到硬下限仍超宽才截断，
+        // 尽量避免丢字符；渲染层另有 Paint 实测缩字兜底（TextFitUtil）。
         float fontPt = fitFontPt(value, width, points, bold);
         String fitted = value;
-        if (fontPt <= MIN_FONT_PT && estimatedMm(value, fontPt, bold) > width) {
+        if (fontPt <= FIT_HARD_MIN_PT && estimatedMm(value, fontPt, bold) > width) {
             fitted = truncateToFit(value, width, fontPt, bold);
         }
         element.text = fitted;
@@ -245,16 +258,18 @@ public final class ComponentLabelFactory {
         return element;
     }
 
-    /** 固定前缀列压缩了值列；4.5pt 在 203 DPI 下约 13 像素，仍可完整保留长 MPN。 */
+    /** 舒适下限：4.5pt 在 203 DPI 下约 13 像素，仍可完整保留长 MPN。 */
     private static final float MIN_FONT_PT = 4.5f;
+    /** 缩字硬下限：4.0pt 约 11 像素；低于此值宁可截断也不再缩。 */
+    static final float FIT_HARD_MIN_PT = 4.0f;
 
     /** 估算文本宽度（全角 1em、半角 0.6em），超过可用宽度时按比例缩小字号。
-     *  0.6em 比理论值保守：热敏/系统字体的数字大写偏宽，留 2% 呼吸位防预览折行。 */
+     *  0.6em 比理论值保守：热敏/系统字体的数字大写偏宽，留 1% 呼吸位防预览折行。 */
     static float fitFontPt(String value, float widthMm, float points, boolean bold) {
         float estimatedMm = estimatedMm(value, points, bold);
         float usableMm = widthMm * 0.99f;
         if (estimatedMm <= usableMm) return points;
-        return Math.max(MIN_FONT_PT, points * usableMm / estimatedMm);
+        return Math.max(FIT_HARD_MIN_PT, points * usableMm / estimatedMm);
     }
 
     private static String truncateToFit(String value, float widthMm, float fontPt, boolean bold) {

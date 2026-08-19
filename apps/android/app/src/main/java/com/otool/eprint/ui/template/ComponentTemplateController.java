@@ -74,6 +74,7 @@ public final class ComponentTemplateController {
     private CheckBox templateBoldCheck;
     private CheckBox templateBrandCheck;
     private CheckBox templateLargeFontCheck;
+    private CheckBox templateSeparatorCheck;
     private CheckBox templateModelCheck;
     private CheckBox templateCategoryCheck;
     private CheckBox templateSpecCheck;
@@ -84,6 +85,7 @@ public final class ComponentTemplateController {
     private boolean templateBoldHeadline = true;
     private boolean templateShowBrand = true;
     private boolean templateLargeFont;
+    private boolean templateSeparators = true;
     private ComponentFieldSelection templateFields = ComponentFieldSelection.defaults();
     private boolean populatingTemplate;
 
@@ -97,6 +99,7 @@ public final class ComponentTemplateController {
         templateBoldHeadline = ComponentTemplateStore.loadBoldHeadline(activity);
         templateShowBrand = ComponentTemplateStore.loadShowBrand(activity);
         templateLargeFont = ComponentTemplateStore.loadLargeFont(activity);
+        templateSeparators = ComponentTemplateStore.loadSeparators(activity);
         templateFields = ComponentTemplateStore.loadFields(activity);
         templateShowBrand = templateFields.brand;
         componentPanel = activity.findViewById(R.id.componentPanel);
@@ -117,6 +120,10 @@ public final class ComponentTemplateController {
 
     public boolean templateLargeFont() {
         return templateLargeFont;
+    }
+
+    public boolean templateSeparators() {
+        return templateSeparators;
     }
 
     public ComponentFieldSelection templateFields() {
@@ -147,6 +154,7 @@ public final class ComponentTemplateController {
         templateBoldCheck = activity.findViewById(R.id.templateBoldCheck);
         templateBrandCheck = activity.findViewById(R.id.templateBrandCheck);
         templateLargeFontCheck = activity.findViewById(R.id.templateLargeFontCheck);
+        templateSeparatorCheck = activity.findViewById(R.id.templateSeparatorCheck);
         templateModelCheck = activity.findViewById(R.id.templateModelCheck);
         templateCategoryCheck = activity.findViewById(R.id.templateCategoryCheck);
         templateSpecCheck = activity.findViewById(R.id.templateSpecCheck);
@@ -199,6 +207,15 @@ public final class ComponentTemplateController {
                 regenerateComponentDocument();
             });
         }
+        if (templateSeparatorCheck != null) {
+            templateSeparatorCheck.setOnCheckedChangeListener((button, checked) -> {
+                if (populatingTemplate) return;
+                templateSeparators = checked;
+                saveTemplateOptions();
+                renderTemplatePanel();
+                regenerateComponentDocument();
+            });
+        }
     }
 
     private void bindTemplateFieldChecks() {
@@ -232,7 +249,7 @@ public final class ComponentTemplateController {
 
     private void saveTemplateOptions() {
         ComponentTemplateStore.save(activity, componentTemplate, templateBoldHeadline,
-                templateLargeFont, templateFields);
+                templateLargeFont, templateFields, templateSeparators);
     }
 
     public void renderTemplatePanel() {
@@ -242,6 +259,7 @@ public final class ComponentTemplateController {
         if (templateBoldCheck != null) templateBoldCheck.setChecked(templateBoldHeadline);
         if (templateBrandCheck != null) templateBrandCheck.setChecked(templateShowBrand);
         if (templateLargeFontCheck != null) templateLargeFontCheck.setChecked(templateLargeFont);
+        if (templateSeparatorCheck != null) templateSeparatorCheck.setChecked(templateSeparators);
         if (templateModelCheck != null) templateModelCheck.setChecked(templateFields.model);
         if (templateCategoryCheck != null) templateCategoryCheck.setChecked(templateFields.category);
         if (templateSpecCheck != null) templateSpecCheck.setChecked(templateFields.specification);
@@ -277,7 +295,8 @@ public final class ComponentTemplateController {
         tile.setPadding(dp(4), dp(4), dp(4), dp(2));
 
         LabelDocument previewDocument = ComponentLabelFactory.create(record, 203, 25f, 15f,
-                template, templateBoldHeadline, templateLargeFont, templateFields);
+                template, templateBoldHeadline, templateLargeFont, templateFields,
+                templateSeparators);
         ImageView image = new ImageView(activity);
         image.setImageBitmap(LabelBitmapRenderer.render(previewDocument));
         tile.addView(image, new LinearLayout.LayoutParams(
@@ -318,7 +337,7 @@ public final class ComponentTemplateController {
         LabelDocument created = ComponentLabelFactory.create(host.componentRecord(),
                 host.selectedProfile().dpi,
                 host.document().widthMm, host.document().heightMm, componentTemplate,
-                templateBoldHeadline, templateLargeFont, templateFields);
+                templateBoldHeadline, templateLargeFont, templateFields, templateSeparators);
         host.setDocument(created);
         host.labelCanvas().setDocument(created);
         // 不默认选中首元素：选择框与编辑面板等用户点按后再出现。

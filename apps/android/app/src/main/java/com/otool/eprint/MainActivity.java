@@ -69,6 +69,7 @@ import com.otool.eprint.protocol.DothanRasterTransform;
 import com.otool.eprint.render.LabelBitmapRenderer;
 import com.otool.eprint.scan.ScanInputMode;
 import com.otool.eprint.scan.ComponentRecord;
+import com.otool.eprint.scan.ComponentRecordStore;
 import com.otool.eprint.scan.RecognitionSettings;
 import com.otool.eprint.scan.RecognitionSettingsStore;
 import com.otool.eprint.scan.ScanModeStore;
@@ -180,6 +181,8 @@ public final class MainActivity extends AppCompatActivity {
         @Override
         public void setComponentRecord(ComponentRecord record) {
             componentRecord = record;
+            // 持久化最近识别结果：重启后模板切换/尺寸切换仍能实时重排。
+            ComponentRecordStore.save(MainActivity.this, record);
         }
 
         @Override
@@ -419,6 +422,8 @@ public final class MainActivity extends AppCompatActivity {
         @Override
         public void setComponentRecord(ComponentRecord record) {
             componentRecord = record;
+            // 持久化最近识别结果：重启后模板切换/尺寸切换仍能实时重排。
+            ComponentRecordStore.save(MainActivity.this, record);
         }
 
         @Override
@@ -567,6 +572,8 @@ public final class MainActivity extends AppCompatActivity {
         selectedProfile = ProfileStore.load(this);
         document.dpi = selectedProfile.dpi;
         document.normalize();
+        // 恢复最近一次识别结果，模板配置/尺寸切换在重启后也能实时重排。
+        componentRecord = ComponentRecordStore.load(this);
         bindViews();
         recognitionController = new LabelRecognitionController(this, recognitionHost,
                 barcodeScanner, labelGuideOverlay,
@@ -596,6 +603,15 @@ public final class MainActivity extends AppCompatActivity {
 
         // 默认不选中任何元素：编辑面板与选择框只在用户点按元素后出现。
         showSelectedElement(null);
+
+        // 有历史识别结果时按当前模板配置重排一次：升级新版排版/分隔线开关后
+        // 旧持久化文档也能立即呈现新版式，并恢复结果摘要显示。
+        if (workMode == WorkMode.COMPONENT_ORGANIZATION && componentRecord != null) {
+            templateController.regenerateComponentDocument();
+            if (componentRecordSummary != null) {
+                componentRecordSummary.setText(componentRecord.summary());
+            }
+        }
 
         Intent serviceIntent = new Intent(this, PrinterConnectionService.class);
         bindService(serviceIntent, hardwareServiceConnection, Context.BIND_AUTO_CREATE);
@@ -904,7 +920,8 @@ public final class MainActivity extends AppCompatActivity {
             document = ComponentLabelFactory.create(componentRecord, selectedProfile.dpi,
                     width, height, templateController.componentTemplate(),
                     templateController.templateBoldHeadline(),
-                    templateController.templateLargeFont(), templateController.templateFields());
+                    templateController.templateLargeFont(), templateController.templateFields(),
+                    templateController.templateSeparators());
             labelCanvas.setDocument(document);
             showSelectedElement(null);
         } else {

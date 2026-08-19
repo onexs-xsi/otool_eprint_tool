@@ -70,6 +70,28 @@ public final class VlmTranscriptionParserTest {
         assertNull(VlmTranscriptionParser.parse("```\n```"));
     }
 
+    /** 真机电阻标签文字列裁剪后的转写（含 "3.00mW" 残读垃圾行与"厚膜电阻 0Ω 333.333mW" 混合行）。 */
+    private static final String DEVICE_TRANSCRIPTION_RESISTOR =
+            "3.00mW\n"
+            + "C844719\n"
+            + "26+ ROHS\n"
+            + "厚膜电阻 0Ω 333.333mW\n"
+            + "0603\n"
+            + "CRCW06030000ZOEAHP\n"
+            + "VISHAY(威世)";
+
+    @Test
+    public void parse_resistorMixedCategorySpecLine() {
+        ComponentRecord record = VlmTranscriptionParser.parse(DEVICE_TRANSCRIPTION_RESISTOR);
+        assertEquals("C844719", record.supplierPartNumber);
+        // 混合行拆分：中文段品类、单位段规格；单位数更多的行胜出（压过 "3.00mW" 残读）
+        assertEquals("厚膜电阻", record.fields.get("品类"));
+        assertEquals("0Ω 333.333mW", record.fields.get("规格"));
+        assertEquals("0603", record.fields.get("封装"));
+        assertEquals("VISHAY(威世)", record.fields.get("厂商"));
+        assertTrue(record.manufacturerPartNumber.startsWith("CRCW"));
+    }
+
     @Test
     public void isDegenerateLine_detection() {
         assertTrue(VlmTranscriptionParser.isDegenerateLine("333333333333"));

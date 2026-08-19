@@ -16,6 +16,7 @@ public final class ComponentTemplateStore {
     private static final String KEY_FIELD_PACKAGE = "field_package";
     private static final String KEY_FIELD_PARAMETERS = "field_parameters";
     private static final String KEY_FIELD_SUPPLIER = "field_supplier";
+    private static final String KEY_SEPARATORS = "separators";
 
     private ComponentTemplateStore() {}
 
@@ -40,6 +41,11 @@ public final class ComponentTemplateStore {
         return prefs(context).getBoolean(KEY_LARGE_FONT, false);
     }
 
+    /** 模板是否绘制分隔线（竖线 + 横线）；默认开启。 */
+    public static boolean loadSeparators(Context context) {
+        return prefs(context).getBoolean(KEY_SEPARATORS, true);
+    }
+
     public static ComponentFieldSelection loadFields(Context context) {
         SharedPreferences preferences = prefs(context);
         return new ComponentFieldSelection(
@@ -62,6 +68,11 @@ public final class ComponentTemplateStore {
 
     public static void save(Context context, ComponentTemplate template, boolean boldHeadline,
                             boolean largeFont, ComponentFieldSelection fields) {
+        save(context, template, boldHeadline, largeFont, fields, loadSeparators(context));
+    }
+
+    public static void save(Context context, ComponentTemplate template, boolean boldHeadline,
+                            boolean largeFont, ComponentFieldSelection fields, boolean separators) {
         prefs(context).edit()
                 .putString(KEY_TEMPLATE, template.name())
                 .putBoolean(KEY_BOLD_HEADLINE, boldHeadline)
@@ -73,6 +84,7 @@ public final class ComponentTemplateStore {
                 .putBoolean(KEY_SHOW_BRAND, fields.brand)
                 .putBoolean(KEY_FIELD_PARAMETERS, fields.parameters)
                 .putBoolean(KEY_FIELD_SUPPLIER, fields.supplierPartNumber)
+                .putBoolean(KEY_SEPARATORS, separators)
                 .apply();
     }
 }

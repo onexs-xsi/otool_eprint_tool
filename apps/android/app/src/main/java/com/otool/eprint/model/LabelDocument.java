@@ -226,7 +226,7 @@ public final class LabelDocument {
             element.widthMm = clamp(element.widthMm, MIN_ELEMENT_SIZE_MM, MAX_ELEMENT_SIZE_MM);
             element.heightMm = clamp(element.heightMm, MIN_ELEMENT_SIZE_MM, MAX_ELEMENT_SIZE_MM);
             element.lineWidthMm = clamp(element.lineWidthMm, 0.1f, 3f);
-            element.fontSizePt = clamp(element.fontSizePt, 4.5f, 72f);
+            element.fontSizePt = clamp(element.fontSizePt, 4.0f, 72f);
             element.tableRows = (int) clamp(element.tableRows, 1, 8);
             element.tableCols = (int) clamp(element.tableCols, 1, 8);
             element.alignment = Math.max(TextElement.ALIGN_LEFT, Math.min(TextElement.ALIGN_RIGHT, element.alignment));
