@@ -7,6 +7,8 @@ public final class RecognitionSettings {
     public final boolean vlmEnabled;
     public final boolean cropToLabel;
     public final boolean perspectiveRectify;
+    public final boolean reduceGlare;
+    public final boolean spaceRecognizedUnits;
     public final boolean maskCodesBeforeVlm;
     public final boolean experimentalWeakCodeMask;
     public final boolean showProcessingPreview;
@@ -37,7 +39,8 @@ public final class RecognitionSettings {
 
     public RecognitionSettings(
             boolean labelEnabled, boolean ppOcrEnabled, boolean vlmEnabled,
-            boolean cropToLabel, boolean perspectiveRectify, boolean maskCodesBeforeVlm,
+            boolean cropToLabel, boolean perspectiveRectify, boolean reduceGlare,
+            boolean spaceRecognizedUnits, boolean maskCodesBeforeVlm,
             boolean experimentalWeakCodeMask, boolean showProcessingPreview,
             int fusionWeightLevel, int minimumLabelCoveragePercent,
             int blurVarianceThreshold, boolean qrEnabled, boolean qrContinuous,
@@ -52,6 +55,8 @@ public final class RecognitionSettings {
         this.vlmEnabled = vlmEnabled;
         this.cropToLabel = cropToLabel;
         this.perspectiveRectify = perspectiveRectify;
+        this.reduceGlare = reduceGlare;
+        this.spaceRecognizedUnits = spaceRecognizedUnits;
         this.maskCodesBeforeVlm = maskCodesBeforeVlm;
         this.experimentalWeakCodeMask = experimentalWeakCodeMask;
         this.showProcessingPreview = showProcessingPreview;
@@ -80,7 +85,7 @@ public final class RecognitionSettings {
         // 无条件覆盖 PP 的正确结果；2 档下 GLM 只补漏、置信度翻倍才翻盘（实测见
         // docs/ocr_optimize_0819.md 回归 2）。
         return new RecognitionSettings(
-                true, true, true, true, true, false, false, true, 2, 20, 60,
+                true, true, true, true, true, true, true, false, false, true, 2, 20, 60,
                 true, true, true, true, false, true,
                 true, true, true, true, true, true, true, true);
     }

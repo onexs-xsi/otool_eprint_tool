@@ -21,6 +21,8 @@ public final class RecognitionSettingsStore {
                 values.getBoolean("label_vlm", defaults.vlmEnabled),
                 values.getBoolean("label_crop", defaults.cropToLabel),
                 values.getBoolean("label_perspective_rectify", defaults.perspectiveRectify),
+                values.getBoolean("label_reduce_glare", defaults.reduceGlare),
+                values.getBoolean("label_space_units", defaults.spaceRecognizedUnits),
                 values.getBoolean("label_mask_codes", defaults.maskCodesBeforeVlm),
                 values.getBoolean("label_weak_code_mask", defaults.experimentalWeakCodeMask),
                 values.getBoolean("label_show_stages", defaults.showProcessingPreview),
@@ -50,6 +52,8 @@ public final class RecognitionSettingsStore {
                 .putBoolean("label_vlm", settings.vlmEnabled)
                 .putBoolean("label_crop", settings.cropToLabel)
                 .putBoolean("label_perspective_rectify", settings.perspectiveRectify)
+                .putBoolean("label_reduce_glare", settings.reduceGlare)
+                .putBoolean("label_space_units", settings.spaceRecognizedUnits)
                 .putBoolean("label_mask_codes", settings.maskCodesBeforeVlm)
                 .putBoolean("label_weak_code_mask", settings.experimentalWeakCodeMask)
                 .putBoolean("label_show_stages", settings.showProcessingPreview)

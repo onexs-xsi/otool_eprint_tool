@@ -37,7 +37,8 @@ public final class ScanFormatCatalogTest {
         RecognitionSettings d = RecognitionSettings.defaults();
         RecognitionSettings settings = new RecognitionSettings(
                 d.labelEnabled, d.ppOcrEnabled, d.vlmEnabled, d.cropToLabel,
-                d.perspectiveRectify, d.maskCodesBeforeVlm, d.experimentalWeakCodeMask,
+                d.perspectiveRectify, d.reduceGlare, d.spaceRecognizedUnits,
+                d.maskCodesBeforeVlm, d.experimentalWeakCodeMask,
                 d.showProcessingPreview, d.fusionWeightLevel,
                 d.minimumLabelCoveragePercent, d.blurVarianceThreshold,
                 d.qrEnabled, d.qrContinuous, d.qrTryHarder, d.qrAlsoInverted,

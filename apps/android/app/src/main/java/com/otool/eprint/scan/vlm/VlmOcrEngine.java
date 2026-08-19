@@ -236,10 +236,11 @@ public final class VlmOcrEngine {
             return VlmResult.failure(initError != null ? initError : "模型未加载", 0);
         }
         File imageFile = new File(tempDir, "vlm_input.png");
-        // 先裁掉码区（QR/一维码不承载字段文本，却浪费视觉 token 预算并干扰阅读顺序），
-        // 再白底补方：MNN 端按 image_size 方形缩放输入（docs/ocr_optimize_0819.md）。
-        Bitmap cropped = VlmInputCropper.cropToTextRegion(frame);
-        Bitmap input = toSquareLetterbox(cropped);
+        // 控制器展示的最终输入与这里实际落盘的输入必须一致。默认保留完整标签，
+        // 不再绕过“码区遮盖”设置偷偷裁半列；这里只做无损白底补方。
+        Bitmap input = prepareModelInput(frame);
+        Log.i(TAG, "GLM 最终输入: " + input.getWidth() + "x" + input.getHeight()
+                + (input == frame ? "（已是方图）" : "（完整标签白底补方）"));
         try (FileOutputStream out = new FileOutputStream(imageFile)) {
             if (!input.compress(Bitmap.CompressFormat.PNG, 100, out)) {
                 return VlmResult.failure("图片编码失败",
@@ -249,8 +250,7 @@ public final class VlmOcrEngine {
             return VlmResult.failure("临时图写入失败：" + error.getMessage(),
                     System.currentTimeMillis() - start);
         } finally {
-            if (input != cropped) input.recycle();
-            if (cropped != frame) cropped.recycle();
+            if (input != frame) input.recycle();
         }
         stopRequested = false;
         // 转写模式下实测 <ocr_reference> 证据注入有害（全空输出），仅 JSON 提取模式附带。
@@ -295,6 +295,10 @@ public final class VlmOcrEngine {
      * 白底补方（letterbox）：输入已是方形时原样返回，否则居中贴到白色正方形画布。
      * MNN 视觉端会把任意输入缩成 image_size×image_size 方形，预补方可避免几何失真。
      */
+    public static Bitmap prepareModelInput(Bitmap src) {
+        return toSquareLetterbox(src);
+    }
+
     static Bitmap toSquareLetterbox(Bitmap src) {
         int width = src.getWidth();
         int height = src.getHeight();

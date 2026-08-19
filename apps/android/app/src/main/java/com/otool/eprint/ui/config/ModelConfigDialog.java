@@ -105,6 +105,12 @@ public final class ModelConfigDialog {
         CheckBox perspectiveRectify = addConfigCheck(activity, labelPage,
                 "OpenCV 透视纠偏标签（默认开启；失败自动回退原旋正）",
                 recognition.perspectiveRectify);
+        CheckBox reduceGlare = addConfigCheck(activity, labelPage,
+                "自动抑制标签反光（局部光照均衡；默认开启）",
+                recognition.reduceGlare);
+        CheckBox spaceUnits = addConfigCheck(activity, labelPage,
+                "识别后在数值与单位之间自动加空格（默认开启）",
+                recognition.spaceRecognizedUnits);
         CheckBox maskCodes = addConfigCheck(activity, labelPage,
                 "实验：送入 GLM 前遮盖二维码/一维码（默认关闭）",
                 recognition.maskCodesBeforeVlm);
@@ -262,6 +268,7 @@ public final class ModelConfigDialog {
                                 labelEnabled.isChecked(), ppEnabled.isChecked(),
                                 vlmEnabled.isChecked(), cropLabel.isChecked(),
                                 perspectiveRectify.isChecked(),
+                                reduceGlare.isChecked(), spaceUnits.isChecked(),
                                 maskCodes.isChecked(), weakMask.isChecked(),
                                 processingStages.isChecked(), fusionWeight.getProgress() + 1,
                                 integerInRange(minimumCoverage, 10, 90, "标签定位最低占比"),

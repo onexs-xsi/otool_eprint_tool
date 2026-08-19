@@ -30,6 +30,7 @@ import com.otool.eprint.scan.LabelFrameProcessor;
 import com.otool.eprint.scan.LabelTextParser;
 import com.otool.eprint.scan.RecognitionSettings;
 import com.otool.eprint.scan.ScanInputMode;
+import com.otool.eprint.scan.UnitSpacingFormatter;
 import com.otool.eprint.scan.VlmTranscriptionParser;
 import com.otool.eprint.scan.ocr.LabelOcrEngine;
 import com.otool.eprint.scan.ocr.OcrLine;
@@ -190,24 +191,48 @@ public final class LabelRecognitionController {
                 frame, guide, host.recognitionSettings().cropToLabel,
                 host.recognitionSettings().minimumLabelCoveragePercent / 100f,
                 host.recognitionSettings().blurVarianceThreshold,
-                host.recognitionSettings().perspectiveRectify);
+                host.recognitionSettings().perspectiveRectify,
+                host.recognitionSettings().reduceGlare);
         lastLabelFrame = processed.bitmap;
-        showProcessingFrame(processed.bitmap, processed.croppedToLabel
-                ? "2/5 · 已定位并清除标签外区域" : "2/5 · 已按引导框整理画面");
+        String processingStage = processed.perspectiveFixed
+                ? "2/5 · 真四边形透视已拉正"
+                : processed.croppedToLabel
+                ? "2/5 · 已清除背景（未确认透视）"
+                : "2/5 · 已按引导框整理画面";
+        if (processed.glareReduced) processingStage += " + 反光抑制";
+        showProcessingFrame(processed.bitmap, processingStage);
         StringBuilder summary = new StringBuilder("已抓取标签画面");
         if (processed.region.found) {
             summary.append("，贴纸占比约 ")
                     .append(Math.round(processed.region.coverage * 100)).append('%');
-            if (Math.abs(processed.region.angleDegrees)
+            if (processed.perspectiveFixed) {
+                summary.append("，真四边形透视 ")
+                        .append(processed.rectificationMethod)
+                        .append("，置信度 ")
+                        .append(Math.round(processed.rectificationConfidence * 100))
+                        .append("%，分差 ")
+                        .append(String.format(Locale.US, "%.2f",
+                                processed.rectificationRunnerUpGap));
+            } else if (Math.abs(processed.region.angleDegrees)
                     >= LabelFrameProcessor.DESKEW_MIN_ANGLE_DEGREES) {
-                summary.append(processed.deskewed ? "，已旋正 " : "，检测倾角 ")
+                summary.append(processed.deskewed ? "，仅旋转降级 " : "，检测倾角 ")
                         .append(String.format(Locale.US, "%.1f", processed.region.angleDegrees))
                         .append("°");
             }
         } else {
             summary.append("，未检出贴纸轮廓，已保留引导框整图");
         }
-        if (processed.croppedToLabel) summary.append("，已清除标签外区域");
+        if (processed.croppedToLabel && !processed.perspectiveFixed) {
+            summary.append("，已保守清除标签外区域（方法 ")
+                    .append(processed.rectificationMethod).append('）');
+        }
+        if (processed.glareReduced) {
+            summary.append("，反光抑制已应用（光照差异 ")
+                    .append(Math.round(processed.glareVariationBefore * 100)).append("%→")
+                    .append(Math.round(processed.glareVariationAfter * 100)).append("%）");
+        } else if (processed.glareReductionRequested) {
+            summary.append("，反光检测未达到处理阈值或收益不足");
+        }
         appendRecognitionLog("2/5 " + summary);
         if (processed.blurry) toast("画面偏糊，请拿稳后重拍");
         runLabelOcr(processed.bitmap);
@@ -283,7 +308,9 @@ public final class LabelRecognitionController {
             maskCount = maskResult.maskedCount;
             textProtected = maskResult.protectedCount;
         }
-        final Bitmap structuredInput = vlmInput;
+        // 先生成与 VlmOcrEngine 实际落盘完全一致的方形输入，再展示并提交；
+        // 禁止 UI 预览中间图、引擎内部另裁一张图。
+        final Bitmap structuredInput = VlmOcrEngine.prepareModelInput(vlmInput);
         final int maskedCount = maskCount;
         final int protectedCount = textProtected;
         final boolean maskingEnabled = host.recognitionSettings().maskCodesBeforeVlm;
@@ -291,11 +318,12 @@ public final class LabelRecognitionController {
             setScanButtonBusy(true);
             Button button = findScanButton();
             if (button != null) button.setText("VLM 识别中…");
+            String inputSize = structuredInput.getWidth() + "×" + structuredInput.getHeight();
             showProcessingFrame(structuredInput, maskingEnabled
-                    ? "4/5 · GLM 输入：精确遮盖 " + maskedCount + " 处码区"
-                    : "4/5 · GLM 输入：码区遮盖未启用");
+                    ? "4/5 · GLM 最终输入 " + inputSize + "：遮盖 " + maskedCount + " 处码区"
+                    : "4/5 · GLM 最终输入 " + inputSize + "：完整标签");
             appendVlmNote(!maskingEnabled
-                    ? "GLM 输入按默认配置保留二维码/一维码"
+                    ? "GLM 最终输入为完整标签，仅白底补方；保留二维码/一维码"
                     : maskedCount > 0
                     ? "GLM 输入前已自动遮盖 " + maskedCount + " 个二维码/一维码区域"
                     : "GLM 输入前未检出可遮盖的二维码/一维码区域");
@@ -396,6 +424,9 @@ public final class LabelRecognitionController {
 
     /** 所有模型都结束后才更新统一记录并生成模板。 */
     private void finalizeLabelRecognition(ComponentRecord record, String timing) {
+        if (host.recognitionSettings().spaceRecognizedUnits) {
+            record = UnitSpacingFormatter.format(record);
+        }
         host.setComponentRecord(record);
         showFinalRecognition(ScanInputMode.LABEL, record.summary());
         appendRecognitionLog("5/5 " + timing);

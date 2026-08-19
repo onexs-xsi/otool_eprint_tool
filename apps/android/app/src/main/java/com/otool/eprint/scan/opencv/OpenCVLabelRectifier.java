@@ -5,11 +5,11 @@ import android.util.Log;
 
 import org.opencv.android.Utils;
 import org.opencv.core.Core;
+import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfPoint;
 import org.opencv.core.MatOfPoint2f;
 import org.opencv.core.Point;
-import org.opencv.core.RotatedRect;
 import org.opencv.core.Scalar;
 import org.opencv.core.Size;
 import org.opencv.imgproc.Imgproc;
@@ -19,11 +19,11 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * 标签四点透视纠偏：在引导框 ROI 内定位纸张轮廓，能逼近四边形就直接透视拉正；
- * 轮廓不是四边形时退用最小外接旋转矩形的四角走同一透视变换。
+ * 标签四点透视纠偏：在引导框 ROI 内定位纸张轮廓，只接受具有标签证据的真实凸四边形；
+ * 轮廓不是四边形或候选冲突时返回 null，由调用方执行无损的旋转/整框回退。
  * 检测按多通道尝试（Otsu 亮区 → Otsu 反相 → HSV 白卡 → Canny 边缘 → 自适应阈值），
- * 每个通道内按面积降序尝试前若干轮廓、多档 approxPolyDP epsilon，
- * 第一个产出有效四边形的通道胜出。任何一步失败（OpenCV 不可用、无有效轮廓、
+ * 每个通道内按面积降序尝试前若干轮廓、多档 approxPolyDP epsilon，所有通道候选统一按
+ * 纸面、边缘、内容和贴边风险评分。任何一步失败（OpenCV 不可用、无高置信度轮廓、
  * 角点异常、输出尺寸异常）都返回 null，调用方回退现有 Java 旋正路径。
  * 角点排序与四边形校验是纯 JVM 静态方法，可单测。
  */
@@ -45,11 +45,47 @@ public final class OpenCVLabelRectifier {
     private static final int MIN_OUTPUT_SIDE = 48;
     private static final double MAX_OUTPUT_SCALE = 1.5;
     private static final double MAX_OUTPUT_ASPECT = 8.0;
+    /** 只有标签证据充分、且明显优于次优候选时才允许破坏性透视裁剪。 */
+    private static final double MIN_PERSPECTIVE_SCORE = 0.55;
+    private static final double MIN_RUNNER_UP_GAP = 0.05;
+
+    /** 可诊断的纠偏结果；ROTATED_RECT 仅表示旋转降级，不冒充透视成功。 */
+    public static final class RectificationResult {
+        public final Bitmap bitmap;
+        public final float[] sourceQuad;
+        public final String method;
+        public final double confidence;
+        public final double runnerUpGap;
+        public final boolean perspectiveFixed;
+
+        RectificationResult(Bitmap bitmap, float[] sourceQuad, String method,
+                            double confidence, double runnerUpGap,
+                            boolean perspectiveFixed) {
+            this.bitmap = bitmap;
+            this.sourceQuad = sourceQuad;
+            this.method = method;
+            this.confidence = confidence;
+            this.runnerUpGap = runnerUpGap;
+            this.perspectiveFixed = perspectiveFixed;
+        }
+
+        public String summary() {
+            return method + " · 置信度 "
+                    + Math.round(confidence * 100) + "%"
+                    + (perspectiveFixed ? " · 四边形透视" : " · 仅旋转降级");
+        }
+    }
 
     private OpenCVLabelRectifier() {}
 
     /** 尝试透视纠偏；失败返回 null，调用方回退原 Java 旋正/裁剪路径。 */
     public static Bitmap rectify(Bitmap roi) {
+        RectificationResult result = rectifyDetailed(roi);
+        return result == null ? null : result.bitmap;
+    }
+
+    /** 尝试透视纠偏并返回角点、方法与置信度，供 UI 和回归日志核对。 */
+    public static RectificationResult rectifyDetailed(Bitmap roi) {
         if (roi == null || roi.getWidth() < MIN_OUTPUT_SIDE * 2
                 || roi.getHeight() < MIN_OUTPUT_SIDE * 2
                 || !OpenCVSupport.isAvailable()) {
@@ -63,11 +99,15 @@ public final class OpenCVLabelRectifier {
         }
     }
 
-    private static Bitmap rectifyInternal(Bitmap roi) {
+    private static RectificationResult rectifyInternal(Bitmap roi) {
         Mat source = new Mat();
         Mat analysis = new Mat();
         Mat gray = new Mat();
         Mat blurred = new Mat();
+        Mat scoreEdges = new Mat();
+        Mat scoreEdgesDilated = new Mat();
+        Mat fineEdges = new Mat();
+        Mat strictPaperMask = new Mat();
         Mat transform = null;
         Mat warped = null;
         try {
@@ -82,18 +122,48 @@ public final class OpenCVLabelRectifier {
             }
             Imgproc.cvtColor(analysis, gray, Imgproc.COLOR_RGBA2GRAY);
             Imgproc.GaussianBlur(gray, blurred, new Size(5, 5), 0);
-            // 多通道按序尝试，第一个产出有效四边形的通道胜出。
-            DetectionResult detection = detectOtsu(blurred, false);
-            if (detection == null) detection = detectOtsu(blurred, true);
-            if (detection == null) detection = detectWhiteCardStrict(analysis);
-            if (detection == null) detection = detectWhiteCard(analysis);
-            if (detection == null) detection = detectCanny(blurred);
-            if (detection == null) detection = detectAdaptive(blurred);
-            // 全部通道都逼近不出四边形时，才对 Otsu 亮区最大轮廓用 minAreaRect 兜底，
-            // 避免粗糙外接矩形抢占更精确的边缘/自适应通道。
-            if (detection == null) detection = detectMinAreaRectFallback(blurred);
-            if (detection == null) return null;
-            float[] corners = detection.corners;
+            Imgproc.Canny(blurred, scoreEdges, 50, 150);
+            Imgproc.Canny(blurred, fineEdges, 30, 100);
+            Mat edgeKernel = Imgproc.getStructuringElement(
+                    Imgproc.MORPH_RECT, new Size(3, 3));
+            Imgproc.dilate(scoreEdges, scoreEdgesDilated, edgeKernel);
+            edgeKernel.release();
+            buildStrictPaperMask(analysis, strictPaperMask);
+
+            // 所有通道都参与候选生成，禁止“第一个合法即胜出”。透明袋/桌面的大亮区
+            // 经常先于真正白标签形成凸四边形，必须用标签证据统一评分。
+            List<DetectionResult> candidates = new ArrayList<>();
+            candidates.addAll(detectOtsuCandidates(blurred, false));
+            candidates.addAll(detectOtsuCandidates(blurred, true));
+            candidates.addAll(detectWhiteCardStrictCandidates(analysis));
+            candidates.addAll(detectWhiteCardCandidates(analysis));
+            candidates.addAll(detectCannyCandidates(blurred));
+            candidates.addAll(detectAdaptiveCandidates(blurred));
+            candidates = deduplicateCandidates(candidates, analysis.cols(), analysis.rows());
+            for (DetectionResult candidate : candidates) {
+                scoreCandidate(candidate, strictPaperMask, scoreEdges,
+                        scoreEdgesDilated, analysis.cols(), analysis.rows());
+            }
+            candidates.sort((left, right) -> Double.compare(right.score, left.score));
+
+            DetectionResult detection = candidates.isEmpty() ? null : candidates.get(0);
+            double runnerUpScore = candidates.size() > 1 ? candidates.get(1).score : 0.0;
+            double runnerUpGap = detection == null ? 0.0 : detection.score - runnerUpScore;
+            logCandidates(candidates);
+            if (!isConfidentPerspective(detection == null ? 0 : detection.score,
+                    runnerUpScore, candidates.size())) {
+                Log.w(TAG, "无高置信度真四边形，保留无损回退；best="
+                        + (detection == null ? "none"
+                        : detection.channel + "/" + format(detection.score))
+                        + " gap=" + format(runnerUpGap));
+                return null;
+            }
+            float[] refinedCorners = refineQuadWithLines(
+                    detection.corners, fineEdges, strictPaperMask,
+                    analysis.cols(), analysis.rows());
+            boolean lineRefined = refinedCorners != null;
+            float[] corners = expandQuad(lineRefined ? refinedCorners : detection.corners,
+                    analysis.cols(), analysis.rows(), 0.025f);
             // 分析坐标映射回 ROI 全分辨率再做透视变换，保证输出清晰度。
             for (int index = 0; index < corners.length; index++) {
                 corners[index] = (float) (corners[index] / scale);
@@ -137,22 +207,30 @@ public final class OpenCVLabelRectifier {
             Bitmap output = Bitmap.createBitmap((int) outputWidth, (int) outputHeight,
                     Bitmap.Config.ARGB_8888);
             Utils.matToBitmap(warped, output);
-            Log.i(TAG, detection.channel + " 命中：四边形面积占比 "
+            String method = detection.channel + (lineRefined ? "+edge-lines" : "");
+            Log.i(TAG, method + " 胜出：score=" + format(detection.score)
+                    + " gap=" + format(runnerUpGap) + "，四边形面积占比 "
                     + String.format(Locale.US, "%.3f", detection.quadAreaRatio)
                     + "，输出 " + (int) outputWidth + "x" + (int) outputHeight);
-            return output;
+            float[] fullResolutionQuad = ordered.clone();
+            return new RectificationResult(output, fullResolutionQuad,
+                    method, detection.score, runnerUpGap, true);
         } finally {
             source.release();
             analysis.release();
             gray.release();
             blurred.release();
+            scoreEdges.release();
+            scoreEdgesDilated.release();
+            fineEdges.release();
+            strictPaperMask.release();
             if (transform != null) transform.release();
             if (warped != null) warped.release();
         }
     }
 
     /** Otsu 阈值通道：invert=false 取亮区（纸张通常比背景亮），invert=true 取反相（深色标签/托盘）。 */
-    private static DetectionResult detectOtsu(Mat blurred, boolean invert) {
+    private static List<DetectionResult> detectOtsuCandidates(Mat blurred, boolean invert) {
         Mat binary = new Mat();
         Mat closed = new Mat();
         Mat kernel = null;
@@ -162,7 +240,7 @@ public final class OpenCVLabelRectifier {
                             | Imgproc.THRESH_OTSU);
             kernel = closeKernel(blurred);
             Imgproc.morphologyEx(binary, closed, Imgproc.MORPH_CLOSE, kernel);
-            return findQuad(closed, invert ? "otsu-inv" : "otsu-bright");
+            return findQuads(closed, invert ? "otsu-inv" : "otsu-bright");
         } finally {
             binary.release();
             closed.release();
@@ -175,7 +253,7 @@ public final class OpenCVLabelRectifier {
      * 先开运算剥离粘连的白色细长物（软管、线缆）再闭运算连片。
      * 离线调参依据：.tools/verification/debug_hsv.py 在真实场景截图上的验证结果。
      */
-    private static DetectionResult detectWhiteCard(Mat analysisRgba) {
+    private static List<DetectionResult> detectWhiteCardCandidates(Mat analysisRgba) {
         Mat rgb = new Mat();
         Mat hsv = new Mat();
         Mat mask = new Mat();
@@ -193,7 +271,7 @@ public final class OpenCVLabelRectifier {
             Imgproc.morphologyEx(mask, opened, Imgproc.MORPH_OPEN, openKernel);
             closeKernel = closeKernel(mask);
             Imgproc.morphologyEx(opened, closed, Imgproc.MORPH_CLOSE, closeKernel);
-            return findQuad(closed, "white-card");
+            return findQuads(closed, "white-card");
         } finally {
             rgb.release();
             hsv.release();
@@ -208,10 +286,10 @@ public final class OpenCVLabelRectifier {
     /**
      * 严格白卡通道：V≥200、S<80 只保留"纸白"区域。宽松白卡（V≥140）会把塑料袋高光、
      * 米色桌面一并连通，导致整张 ROI 粘成一块、各通道都逼近不出四边形（2026-08-19 电阻
-     * 标签实拍复现）。严格阈值下标签卡独立成块；先走标准四边形逼近，不出四边形时直接
-     * 采纳最大分量的 minAreaRect 四角（倾斜卡片的标准姿态，比放弃矫正强得多）。
+     * 标签实拍复现）。严格阈值下标签卡通常能独立成块；只采纳轮廓产生的真实四边形，
+     * 不再用旋转矩形冒充透视角点。
      */
-    private static DetectionResult detectWhiteCardStrict(Mat analysisRgba) {
+    private static List<DetectionResult> detectWhiteCardStrictCandidates(Mat analysisRgba) {
         Mat rgb = new Mat();
         Mat hsv = new Mat();
         Mat mask = new Mat();
@@ -229,9 +307,7 @@ public final class OpenCVLabelRectifier {
             Imgproc.morphologyEx(mask, opened, Imgproc.MORPH_OPEN, openKernel);
             closeKernel = closeKernel(mask);
             Imgproc.morphologyEx(opened, closed, Imgproc.MORPH_CLOSE, closeKernel);
-            DetectionResult quad = findQuad(closed, "white-card-strict");
-            if (quad != null) return quad;
-            return minAreaRectQuad(closed, "white-card-strict-minrect");
+            return findQuads(closed, "white-card-strict");
         } finally {
             rgb.release();
             hsv.release();
@@ -243,8 +319,30 @@ public final class OpenCVLabelRectifier {
         }
     }
 
+    /** 与严格白卡通道一致的纸面信号，供跨通道候选统一评分。 */
+    private static void buildStrictPaperMask(Mat analysisRgba, Mat output) {
+        Mat rgb = new Mat();
+        Mat hsv = new Mat();
+        Mat raw = new Mat();
+        Mat kernel = null;
+        try {
+            Imgproc.cvtColor(analysisRgba, rgb, Imgproc.COLOR_RGBA2RGB);
+            Imgproc.cvtColor(rgb, hsv, Imgproc.COLOR_RGB2HSV);
+            Core.inRange(hsv, new Scalar(0, 0, 200), new Scalar(180, 80, 255), raw);
+            int openSize = Math.max(3, Math.min(raw.cols(), raw.rows()) / 130) | 1;
+            kernel = Imgproc.getStructuringElement(
+                    Imgproc.MORPH_RECT, new Size(openSize, openSize));
+            Imgproc.morphologyEx(raw, output, Imgproc.MORPH_OPEN, kernel);
+        } finally {
+            rgb.release();
+            hsv.release();
+            raw.release();
+            if (kernel != null) kernel.release();
+        }
+    }
+
     /** Canny 边缘通道：亮度相近的标签卡与白色软管仍能被边缘分开。 */
-    private static DetectionResult detectCanny(Mat blurred) {
+    private static List<DetectionResult> detectCannyCandidates(Mat blurred) {
         Mat edges = new Mat();
         Mat dilated = new Mat();
         Mat closed = new Mat();
@@ -256,7 +354,7 @@ public final class OpenCVLabelRectifier {
             Imgproc.dilate(edges, dilated, dilateKernel);
             closeKernel = closeKernel(blurred);
             Imgproc.morphologyEx(dilated, closed, Imgproc.MORPH_CLOSE, closeKernel);
-            return findQuad(closed, "canny");
+            return findQuads(closed, "canny");
         } finally {
             edges.release();
             dilated.release();
@@ -267,7 +365,7 @@ public final class OpenCVLabelRectifier {
     }
 
     /** 自适应阈值通道：对光照不均、局部对比度场景更稳健。 */
-    private static DetectionResult detectAdaptive(Mat blurred) {
+    private static List<DetectionResult> detectAdaptiveCandidates(Mat blurred) {
         Mat binary = new Mat();
         Mat closed = new Mat();
         Mat kernel = null;
@@ -277,80 +375,11 @@ public final class OpenCVLabelRectifier {
                     Imgproc.ADAPTIVE_THRESH_GAUSSIAN_C, Imgproc.THRESH_BINARY, blockSize, 5);
             kernel = closeKernel(blurred);
             Imgproc.morphologyEx(binary, closed, Imgproc.MORPH_CLOSE, kernel);
-            return findQuad(closed, "adaptive");
+            return findQuads(closed, "adaptive");
         } finally {
             binary.release();
             closed.release();
             if (kernel != null) kernel.release();
-        }
-    }
-
-    /** minAreaRect 兜底四边形的最大面积占比；更大基本是"整张 ROI 粘连成一块"的误检。 */
-    private static final double MAX_FALLBACK_AREA_RATIO = 0.90;
-
-    /**
-     * 最后的兜底：Otsu 亮区最大轮廓的最小外接旋转矩形四角。
-     * 四角先在分析分辨率过 {@link #isValidApproxQuad}，且面积占比不得超过
-     * {@link #MAX_FALLBACK_AREA_RATIO}（超出说明亮区已粘成一整块，拉出的是整幅 ROI），
-     * 避免粗糙外接矩形抢占更精确的边缘/自适应通道。
-     */
-    private static DetectionResult detectMinAreaRectFallback(Mat blurred) {
-        Mat binary = new Mat();
-        Mat closed = new Mat();
-        Mat kernel = null;
-        try {
-            Imgproc.threshold(blurred, binary, 0, 255,
-                    Imgproc.THRESH_BINARY | Imgproc.THRESH_OTSU);
-            kernel = closeKernel(blurred);
-            Imgproc.morphologyEx(binary, closed, Imgproc.MORPH_CLOSE, kernel);
-            return minAreaRectQuad(closed, "minAreaRect");
-        } finally {
-            binary.release();
-            closed.release();
-            if (kernel != null) kernel.release();
-        }
-    }
-
-    /**
-     * 二值图最大连通轮廓的 minAreaRect 四角；面积占比超出合理区间或四边形校验失败
-     * 时返回 null（超出说明亮区已粘成一整块，拉出的是整幅 ROI）。
-     */
-    private static DetectionResult minAreaRectQuad(Mat closed, String channel) {
-        List<MatOfPoint> contours = new ArrayList<>();
-        Mat hierarchy = new Mat();
-        Imgproc.findContours(closed, contours, hierarchy,
-                Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE);
-        hierarchy.release();
-        try {
-            double imageArea = closed.cols() * (double) closed.rows();
-            MatOfPoint largest = null;
-            double largestArea = 0;
-            for (MatOfPoint contour : contours) {
-                double area = Imgproc.contourArea(contour);
-                if (area > largestArea) {
-                    largestArea = area;
-                    largest = contour;
-                }
-            }
-            if (largest == null || largestArea < imageArea * MIN_AREA_RATIO
-                    || largestArea > imageArea * MAX_AREA_RATIO) {
-                Log.d(TAG, channel + " 无有效轮廓（轮廓数=" + contours.size() + "）");
-                return null;
-            }
-            float[] corners = minAreaRectCorners(largest);
-            if (!isValidApproxQuad(corners, closed.cols(), closed.rows())) {
-                Log.d(TAG, channel + " 四边形校验失败");
-                return null;
-            }
-            double ratio = quadArea(corners) / imageArea;
-            if (ratio > MAX_FALLBACK_AREA_RATIO) {
-                Log.d(TAG, channel + " 四边形面积占比过高（"
-                        + String.format(Locale.US, "%.3f", ratio) + "），视为整幅粘连，放弃");
-                return null;
-            }
-            return new DetectionResult(corners, channel, ratio);
-        } finally {
-            for (MatOfPoint contour : contours) contour.release();
         }
     }
 
@@ -366,8 +395,9 @@ public final class OpenCVLabelRectifier {
      * 面积占比合理的轮廓，逐个用多档 epsilon 做 approxPolyDP，第一个逼近出有效
      * 四边形的轮廓即采纳；都不出四边形时返回 null，由调用方尝试下一通道。
      */
-    private static DetectionResult findQuad(Mat closed, String channel) {
+    private static List<DetectionResult> findQuads(Mat closed, String channel) {
         List<MatOfPoint> contours = new ArrayList<>();
+        List<DetectionResult> results = new ArrayList<>();
         Mat hierarchy = new Mat();
         Imgproc.findContours(closed, contours, hierarchy,
                 Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE);
@@ -401,15 +431,461 @@ public final class OpenCVLabelRectifier {
             for (int i = 0; i < tried; i++) {
                 float[] quad = approxQuad(candidates.get(i), closed.cols(), closed.rows());
                 if (quad != null) {
-                    return new DetectionResult(quad, channel, quadArea(quad) / imageArea);
+                    results.add(new DetectionResult(quad, channel,
+                            quadArea(quad) / imageArea));
                 }
             }
-            Log.d(TAG, channel + " 未逼近出有效四边形（候选轮廓数="
-                    + candidates.size() + "/" + contours.size() + "）");
-            return null;
+            if (results.isEmpty()) {
+                Log.d(TAG, channel + " 未逼近出有效四边形（候选轮廓数="
+                        + candidates.size() + "/" + contours.size() + "）");
+            }
+            return results;
         } finally {
             for (MatOfPoint contour : contours) contour.release();
         }
+    }
+
+    /** 跨通道近似相同的四边形只保留一个，避免同一标签占据冠亚军导致分差误判。 */
+    private static List<DetectionResult> deduplicateCandidates(
+            List<DetectionResult> candidates, int width, int height) {
+        List<DetectionResult> unique = new ArrayList<>();
+        double diagonal = Math.hypot(width, height);
+        for (DetectionResult candidate : candidates) {
+            int duplicateIndex = -1;
+            for (int index = 0; index < unique.size(); index++) {
+                DetectionResult existing = unique.get(index);
+                if (Math.abs(existing.quadAreaRatio - candidate.quadAreaRatio) <= 0.08
+                        && averageCornerDistance(existing.corners, candidate.corners)
+                        <= diagonal * 0.05) {
+                    duplicateIndex = index;
+                    break;
+                }
+            }
+            if (duplicateIndex < 0) {
+                unique.add(candidate);
+            } else if (channelPrior(candidate.channel)
+                    > channelPrior(unique.get(duplicateIndex).channel)) {
+                unique.set(duplicateIndex, candidate);
+            }
+        }
+        return unique;
+    }
+
+    private static double averageCornerDistance(float[] left, float[] right) {
+        float[] orderedLeft = sortQuadCorners(left);
+        float[] orderedRight = sortQuadCorners(right);
+        double total = 0;
+        for (int index = 0; index < 4; index++) {
+            total += Math.hypot(orderedLeft[index * 2] - orderedRight[index * 2],
+                    orderedLeft[index * 2 + 1] - orderedRight[index * 2 + 1]);
+        }
+        return total / 4.0;
+    }
+
+    private static double channelPrior(String channel) {
+        if (channel.startsWith("white-card-strict")) return 5;
+        if (channel.startsWith("white-card")) return 4;
+        if (channel.startsWith("canny")) return 3;
+        if (channel.startsWith("adaptive")) return 2;
+        return 1;
+    }
+
+    /**
+     * 标签证据评分：纸面纯度/内外对比、四边边缘支撑、内部文字/码区边缘密度、
+     * 面积与贴边风险。面积只作弱先验，禁止“大轮廓天然胜出”。
+     */
+    private static void scoreCandidate(DetectionResult candidate, Mat strictPaperMask,
+                                       Mat scoreEdges, Mat scoreEdgesDilated,
+                                       int width, int height) {
+        float[] ordered = sortQuadCorners(candidate.corners);
+        Mat polygonMask = Mat.zeros(height, width, CvType.CV_8UC1);
+        Mat signalInside = new Mat();
+        Mat edgeInside = new Mat();
+        Mat dilatedPolygon = new Mat();
+        Mat ring = new Mat();
+        Mat signalRing = new Mat();
+        Mat ringKernel = null;
+        MatOfPoint polygon = new MatOfPoint(
+                new Point(ordered[0], ordered[1]), new Point(ordered[2], ordered[3]),
+                new Point(ordered[4], ordered[5]), new Point(ordered[6], ordered[7]));
+        try {
+            Imgproc.fillConvexPoly(polygonMask, polygon, new Scalar(255));
+            double insideArea = Math.max(1, Core.countNonZero(polygonMask));
+            Core.bitwise_and(strictPaperMask, polygonMask, signalInside);
+            candidate.paperFill = Core.countNonZero(signalInside) / insideArea;
+            Core.bitwise_and(scoreEdges, polygonMask, edgeInside);
+            candidate.contentDensity = Core.countNonZero(edgeInside) / insideArea;
+
+            int ringSize = Math.max(7, Math.min(width, height) / 45) | 1;
+            ringKernel = Imgproc.getStructuringElement(
+                    Imgproc.MORPH_RECT, new Size(ringSize, ringSize));
+            Imgproc.dilate(polygonMask, dilatedPolygon, ringKernel);
+            Core.subtract(dilatedPolygon, polygonMask, ring);
+            double ringArea = Math.max(1, Core.countNonZero(ring));
+            Core.bitwise_and(strictPaperMask, ring, signalRing);
+            double outsidePaperFill = Core.countNonZero(signalRing) / ringArea;
+            double paperContrast = Math.max(0, candidate.paperFill - outsidePaperFill);
+
+            candidate.edgeSupport = edgeSupport(ordered, scoreEdgesDilated, width, height);
+            candidate.borderTouch = borderTouchRatio(ordered, width, height);
+            double areaQuality = areaQuality(candidate.quadAreaRatio);
+            candidate.score = candidateScore(candidate.channel, candidate.paperFill,
+                    paperContrast, candidate.edgeSupport, candidate.contentDensity,
+                    areaQuality, candidate.borderTouch);
+        } finally {
+            polygon.release();
+            polygonMask.release();
+            signalInside.release();
+            edgeInside.release();
+            dilatedPolygon.release();
+            ring.release();
+            signalRing.release();
+            if (ringKernel != null) ringKernel.release();
+        }
+    }
+
+    private static double edgeSupport(float[] ordered, Mat dilatedEdges,
+                                      int width, int height) {
+        double total = 0;
+        for (int side = 0; side < 4; side++) {
+            int next = (side + 1) % 4;
+            double x0 = ordered[side * 2];
+            double y0 = ordered[side * 2 + 1];
+            double x1 = ordered[next * 2];
+            double y1 = ordered[next * 2 + 1];
+            int samples = Math.max(24, Math.min(220,
+                    (int) Math.round(Math.hypot(x1 - x0, y1 - y0))));
+            int supported = 0;
+            for (int sample = 0; sample < samples; sample++) {
+                double t = samples == 1 ? 0 : sample / (double) (samples - 1);
+                int x = Math.max(0, Math.min(width - 1,
+                        (int) Math.round(x0 + (x1 - x0) * t)));
+                int y = Math.max(0, Math.min(height - 1,
+                        (int) Math.round(y0 + (y1 - y0) * t)));
+                double[] value = dilatedEdges.get(y, x);
+                if (value != null && value.length > 0 && value[0] > 0) supported++;
+            }
+            total += supported / (double) samples;
+        }
+        return total / 4.0;
+    }
+
+    private static double borderTouchRatio(float[] ordered, int width, int height) {
+        double marginX = width * 0.02;
+        double marginY = height * 0.02;
+        int touched = 0;
+        for (int index = 0; index < 4; index++) {
+            double x = ordered[index * 2];
+            double y = ordered[index * 2 + 1];
+            if (x <= marginX || x >= width - marginX
+                    || y <= marginY || y >= height - marginY) touched++;
+        }
+        return touched / 4.0;
+    }
+
+    private static double areaQuality(double ratio) {
+        if (ratio <= 0.70) return 1.0;
+        return Math.max(0.20, 1.0 - (ratio - 0.70) / 0.28 * 0.80);
+    }
+
+    private static double clamp01(double value) {
+        return Math.max(0, Math.min(1, value));
+    }
+
+    /** 纯几何/统计评分收口，供 JVM 锁定“真标签胜过外部大亮区”的关键回归。 */
+    static double candidateScore(String channel, double paperFill, double paperContrast,
+                                 double edgeSupport, double contentDensity,
+                                 double areaQuality, double borderTouch) {
+        double channelBonus = channel != null && channel.startsWith("white-card-strict") ? 0.08
+                : channel != null && channel.startsWith("white-card") ? 0.04
+                : channel != null && channel.startsWith("canny") ? 0.02
+                : channel != null && channel.startsWith("adaptive") ? 0.01 : 0.0;
+        return clamp01(
+                0.24 * clamp01(paperFill)
+                        + 0.18 * clamp01(paperContrast / 0.60)
+                        + 0.22 * clamp01(edgeSupport)
+                        + 0.20 * clamp01(contentDensity / 0.08)
+                        + 0.08 * clamp01(areaQuality)
+                        + channelBonus
+                        - 0.25 * clamp01(borderTouch));
+    }
+
+    static boolean isConfidentPerspective(double bestScore, double runnerUpScore,
+                                           int candidateCount) {
+        if (bestScore < MIN_PERSPECTIVE_SCORE) return false;
+        return candidateCount <= 1 || bestScore - runnerUpScore >= MIN_RUNNER_UP_GAP;
+    }
+
+    /** 从质心向外扩安全边距，防角点轻微内缩时切到标签边缘文字。 */
+    static float[] expandQuad(float[] corners, int width, int height, float ratio) {
+        float[] ordered = sortQuadCorners(corners);
+        float centerX = 0;
+        float centerY = 0;
+        for (int index = 0; index < 4; index++) {
+            centerX += ordered[index * 2];
+            centerY += ordered[index * 2 + 1];
+        }
+        centerX /= 4f;
+        centerY /= 4f;
+        float[] expanded = new float[8];
+        float scale = 1f + Math.max(0f, ratio);
+        for (int index = 0; index < 4; index++) {
+            float x = centerX + (ordered[index * 2] - centerX) * scale;
+            float y = centerY + (ordered[index * 2 + 1] - centerY) * scale;
+            expanded[index * 2] = Math.max(0, Math.min(width - 1, x));
+            expanded[index * 2 + 1] = Math.max(0, Math.min(height - 1, y));
+        }
+        return expanded;
+    }
+
+    /**
+     * 在初始轮廓四边附近寻找有“内侧纸白、外侧非纸白”证据的长直线，四条独立边求交。
+     * 可修复透明袋高光把某个轮廓角向外拖拽的情况；任一边证据不足时原样放弃精修。
+     */
+    private static float[] refineQuadWithLines(float[] initialCorners, Mat fineEdges,
+                                               Mat paperMask, int width, int height) {
+        float[] ordered = sortQuadCorners(initialCorners);
+        Mat lines = new Mat();
+        try {
+            int minimumLineLength = Math.max(35, Math.min(width, height) / 12);
+            Imgproc.HoughLinesP(fineEdges, lines, 1, Math.PI / 720.0,
+                    18, minimumLineLength, Math.max(18, Math.min(width, height) / 20));
+            List<LineModel> segments = readLineModels(lines);
+            if (segments.isEmpty()) return null;
+            double centerX = 0;
+            double centerY = 0;
+            for (int index = 0; index < 4; index++) {
+                centerX += ordered[index * 2];
+                centerY += ordered[index * 2 + 1];
+            }
+            centerX /= 4.0;
+            centerY /= 4.0;
+            LineModel[] sides = new LineModel[4];
+            for (int side = 0; side < 4; side++) {
+                int next = (side + 1) % 4;
+                sides[side] = selectBoundaryLine(segments, paperMask,
+                        ordered[side * 2], ordered[side * 2 + 1],
+                        ordered[next * 2], ordered[next * 2 + 1],
+                        centerX, centerY, width, height);
+                if (sides[side] == null) return null;
+            }
+            float[] refined = new float[8];
+            float[] topLeft = intersectInfiniteLines(sides[3].coordinates(), sides[0].coordinates());
+            float[] topRight = intersectInfiniteLines(sides[0].coordinates(), sides[1].coordinates());
+            float[] bottomRight = intersectInfiniteLines(sides[1].coordinates(), sides[2].coordinates());
+            float[] bottomLeft = intersectInfiniteLines(sides[2].coordinates(), sides[3].coordinates());
+            if (topLeft == null || topRight == null || bottomRight == null || bottomLeft == null) {
+                return null;
+            }
+            float[][] points = {topLeft, topRight, bottomRight, bottomLeft};
+            double diagonal = Math.hypot(width, height);
+            for (int index = 0; index < 4; index++) {
+                refined[index * 2] = points[index][0];
+                refined[index * 2 + 1] = points[index][1];
+                if (Math.hypot(refined[index * 2] - ordered[index * 2],
+                        refined[index * 2 + 1] - ordered[index * 2 + 1])
+                        > diagonal * 0.18) {
+                    return null;
+                }
+            }
+            if (!isUsableQuad(refined, width, height)) return null;
+            Log.i(TAG, "边线精修成功：top=" + sides[0].shortSummary()
+                    + " right=" + sides[1].shortSummary()
+                    + " bottom=" + sides[2].shortSummary()
+                    + " left=" + sides[3].shortSummary());
+            return refined;
+        } finally {
+            lines.release();
+        }
+    }
+
+    private static List<LineModel> readLineModels(Mat lines) {
+        List<LineModel> result = new ArrayList<>();
+        if (lines.empty()) return result;
+        if (lines.channels() >= 4) {
+            for (int row = 0; row < lines.rows(); row++) {
+                for (int col = 0; col < lines.cols(); col++) {
+                    double[] value = lines.get(row, col);
+                    if (value != null && value.length >= 4) {
+                        result.add(new LineModel(value[0], value[1], value[2], value[3]));
+                    }
+                }
+            }
+        } else if (lines.cols() >= 4) {
+            for (int row = 0; row < lines.rows(); row++) {
+                double[] value = new double[4];
+                boolean complete = true;
+                for (int col = 0; col < 4; col++) {
+                    double[] cell = lines.get(row, col);
+                    if (cell == null || cell.length == 0) {
+                        complete = false;
+                        break;
+                    }
+                    value[col] = cell[0];
+                }
+                if (complete) result.add(new LineModel(value[0], value[1], value[2], value[3]));
+            }
+        }
+        return result;
+    }
+
+    private static LineModel selectBoundaryLine(List<LineModel> segments, Mat paperMask,
+                                                double x0, double y0, double x1, double y1,
+                                                double centerX, double centerY,
+                                                int width, int height) {
+        double sideX = x1 - x0;
+        double sideY = y1 - y0;
+        double sideLength = Math.hypot(sideX, sideY);
+        if (sideLength < 1) return null;
+        double unitX = sideX / sideLength;
+        double unitY = sideY / sideLength;
+        double maxDistance = Math.min(width, height) * 0.16;
+        LineModel best = null;
+        double bestScore = -Double.MAX_VALUE;
+        for (LineModel line : segments) {
+            double orientationCosine = Math.abs(unitX * line.unitX + unitY * line.unitY);
+            double angleDifference = Math.toDegrees(Math.acos(
+                    Math.max(-1, Math.min(1, orientationCosine))));
+            if (angleDifference > 20.0) continue;
+            double midpointX = (line.x0 + line.x1) / 2.0;
+            double midpointY = (line.y0 + line.y1) / 2.0;
+            double deltaX = midpointX - x0;
+            double deltaY = midpointY - y0;
+            double lineDistance = Math.abs(unitX * deltaY - unitY * deltaX);
+            double projection = (deltaX * unitX + deltaY * unitY) / sideLength;
+            if (lineDistance > maxDistance || projection < -0.30 || projection > 1.30) continue;
+            double contrast = linePaperContrast(
+                    line, paperMask, centerX, centerY, width, height);
+            if (contrast < 0.08) continue;
+            double score = line.length * (0.35 + contrast) - lineDistance * 0.40;
+            if (score > bestScore) {
+                bestScore = score;
+                best = line.withEvidence(score, contrast);
+            }
+        }
+        return best;
+    }
+
+    private static double linePaperContrast(LineModel line, Mat paperMask,
+                                            double centerX, double centerY,
+                                            int width, int height) {
+        double normalX = -line.unitY;
+        double normalY = line.unitX;
+        double midpointX = (line.x0 + line.x1) / 2.0;
+        double midpointY = (line.y0 + line.y1) / 2.0;
+        if ((centerX - midpointX) * normalX + (centerY - midpointY) * normalY < 0) {
+            normalX = -normalX;
+            normalY = -normalY;
+        }
+        double bestContrast = -1;
+        int samples = Math.max(12, Math.min(120, (int) Math.round(line.length / 4.0)));
+        int[] offsets = {5, 9, 13};
+        for (int offset : offsets) {
+            int inside = 0;
+            int outside = 0;
+            int insideCount = 0;
+            int outsideCount = 0;
+            for (int sample = 0; sample < samples; sample++) {
+                double t = 0.08 + 0.84 * sample / Math.max(1.0, samples - 1.0);
+                double baseX = line.x0 + (line.x1 - line.x0) * t;
+                double baseY = line.y0 + (line.y1 - line.y0) * t;
+                int insideX = (int) Math.round(baseX + normalX * offset);
+                int insideY = (int) Math.round(baseY + normalY * offset);
+                int outsideX = (int) Math.round(baseX - normalX * offset);
+                int outsideY = (int) Math.round(baseY - normalY * offset);
+                if (insideX >= 0 && insideX < width && insideY >= 0 && insideY < height) {
+                    double[] value = paperMask.get(insideY, insideX);
+                    if (value != null && value.length > 0 && value[0] > 0) inside++;
+                    insideCount++;
+                }
+                if (outsideX >= 0 && outsideX < width
+                        && outsideY >= 0 && outsideY < height) {
+                    double[] value = paperMask.get(outsideY, outsideX);
+                    if (value != null && value.length > 0 && value[0] > 0) outside++;
+                    outsideCount++;
+                }
+            }
+            double insideRatio = inside / (double) Math.max(1, insideCount);
+            double outsideRatio = outside / (double) Math.max(1, outsideCount);
+            bestContrast = Math.max(bestContrast, insideRatio - outsideRatio);
+        }
+        return bestContrast;
+    }
+
+    /** 两条无限直线求交；每条格式为 x0,y0,x1,y1，平行时返回 null。 */
+    static float[] intersectInfiniteLines(float[] first, float[] second) {
+        if (first == null || second == null || first.length != 4 || second.length != 4) {
+            return null;
+        }
+        double ax = first[2] - first[0];
+        double ay = first[3] - first[1];
+        double bx = second[2] - second[0];
+        double by = second[3] - second[1];
+        double denominator = ax * by - ay * bx;
+        if (Math.abs(denominator) < 1e-6) return null;
+        double deltaX = second[0] - first[0];
+        double deltaY = second[1] - first[1];
+        double t = (deltaX * by - deltaY * bx) / denominator;
+        return new float[]{(float) (first[0] + t * ax), (float) (first[1] + t * ay)};
+    }
+
+    private static final class LineModel {
+        final double x0;
+        final double y0;
+        final double x1;
+        final double y1;
+        final double unitX;
+        final double unitY;
+        final double length;
+        final double score;
+        final double contrast;
+
+        LineModel(double x0, double y0, double x1, double y1) {
+            this(x0, y0, x1, y1, 0, 0);
+        }
+
+        LineModel(double x0, double y0, double x1, double y1,
+                  double score, double contrast) {
+            this.x0 = x0;
+            this.y0 = y0;
+            this.x1 = x1;
+            this.y1 = y1;
+            this.length = Math.max(1e-6, Math.hypot(x1 - x0, y1 - y0));
+            this.unitX = (x1 - x0) / length;
+            this.unitY = (y1 - y0) / length;
+            this.score = score;
+            this.contrast = contrast;
+        }
+
+        LineModel withEvidence(double newScore, double newContrast) {
+            return new LineModel(x0, y0, x1, y1, newScore, newContrast);
+        }
+
+        float[] coordinates() {
+            return new float[]{(float) x0, (float) y0, (float) x1, (float) y1};
+        }
+
+        String shortSummary() {
+            return "L" + Math.round(length) + "/c" + format(contrast);
+        }
+    }
+
+    private static void logCandidates(List<DetectionResult> candidates) {
+        int count = Math.min(8, candidates.size());
+        for (int index = 0; index < count; index++) {
+            DetectionResult value = candidates.get(index);
+            Log.i(TAG, "候选#" + (index + 1) + " " + value.channel
+                    + " score=" + format(value.score)
+                    + " area=" + format(value.quadAreaRatio)
+                    + " paper=" + format(value.paperFill)
+                    + " edge=" + format(value.edgeSupport)
+                    + " content=" + format(value.contentDensity)
+                    + " border=" + format(value.borderTouch));
+        }
+    }
+
+    private static String format(double value) {
+        return String.format(Locale.US, "%.3f", value);
     }
 
     /**
@@ -439,37 +915,6 @@ public final class OpenCVLabelRectifier {
         }
     }
 
-    /** 非四边形轮廓的兜底：最小外接旋转矩形四角（兼容 boxPoints 的两种输出布局）。 */
-    private static float[] minAreaRectCorners(MatOfPoint contour) {
-        MatOfPoint2f curve = new MatOfPoint2f(contour.toArray());
-        Mat boxPoints = new Mat();
-        try {
-            RotatedRect box = Imgproc.minAreaRect(curve);
-            Imgproc.boxPoints(box, boxPoints);
-            float[] corners = new float[8];
-            // boxPoints 输出布局随 OpenCV 版本不同：4x1 CV_32FC2 或 4x2 CV_32FC1，两种都兼容。
-            boolean twoChannel = boxPoints.channels() == 2;
-            for (int index = 0; index < 4; index++) {
-                double x;
-                double y;
-                if (twoChannel) {
-                    double[] xy = boxPoints.get(index, 0);
-                    x = xy[0];
-                    y = xy[1];
-                } else {
-                    x = boxPoints.get(index, 0)[0];
-                    y = boxPoints.get(index, 1)[0];
-                }
-                corners[index * 2] = (float) x;
-                corners[index * 2 + 1] = (float) y;
-            }
-            return corners;
-        } finally {
-            curve.release();
-            boxPoints.release();
-        }
-    }
-
     /** 四边形面积（鞋带公式，corners 为无序四角但保持多边形环绕序）。 */
     private static double quadArea(float[] corners) {
         double area = 0;
@@ -486,6 +931,11 @@ public final class OpenCVLabelRectifier {
         final float[] corners;
         final String channel;
         final double quadAreaRatio;
+        double paperFill;
+        double contentDensity;
+        double edgeSupport;
+        double borderTouch;
+        double score;
 
         DetectionResult(float[] corners, String channel, double quadAreaRatio) {
             this.corners = corners;
@@ -496,24 +946,43 @@ public final class OpenCVLabelRectifier {
 
     /** 角点排序为 左上、右上、右下、左下；纯几何逻辑，供 JVM 单测。 */
     static float[] sortQuadCorners(float[] corners) {
-        float[] ordered = new float[8];
-        int topLeft = 0;
-        int bottomRight = 0;
-        int topRight = 0;
-        int bottomLeft = 0;
-        for (int index = 1; index < 4; index++) {
-            float sum = corners[index * 2] + corners[index * 2 + 1];
-            float diff = corners[index * 2] - corners[index * 2 + 1];
-            if (sum < corners[topLeft * 2] + corners[topLeft * 2 + 1]) topLeft = index;
-            if (sum > corners[bottomRight * 2] + corners[bottomRight * 2 + 1]) {
-                bottomRight = index;
+        if (corners == null || corners.length != 8) return corners;
+        float centerX = 0;
+        float centerY = 0;
+        for (int index = 0; index < 4; index++) {
+            centerX += corners[index * 2];
+            centerY += corners[index * 2 + 1];
+        }
+        centerX /= 4f;
+        centerY /= 4f;
+        int[] around = {0, 1, 2, 3};
+        // 四点按相对质心极角递增排列；屏幕坐标 y 向下时即 TL->TR->BR->BL 环向。
+        for (int i = 1; i < around.length; i++) {
+            int value = around[i];
+            double angle = Math.atan2(corners[value * 2 + 1] - centerY,
+                    corners[value * 2] - centerX);
+            int j = i - 1;
+            while (j >= 0 && Math.atan2(corners[around[j] * 2 + 1] - centerY,
+                    corners[around[j] * 2] - centerX) > angle) {
+                around[j + 1] = around[j];
+                j--;
             }
-            if (diff > corners[topRight * 2] - corners[topRight * 2 + 1]) topRight = index;
-            if (diff < corners[bottomLeft * 2] - corners[bottomLeft * 2 + 1]) {
-                bottomLeft = index;
+            around[j + 1] = value;
+        }
+        int start = 0;
+        for (int index = 1; index < 4; index++) {
+            int current = around[index];
+            int best = around[start];
+            if (corners[current * 2] + corners[current * 2 + 1]
+                    < corners[best * 2] + corners[best * 2 + 1]) {
+                start = index;
             }
         }
-        int[] order = {topLeft, topRight, bottomRight, bottomLeft};
+        int[] order = new int[4];
+        for (int index = 0; index < 4; index++) {
+            order[index] = around[(start + index) % 4];
+        }
+        float[] ordered = new float[8];
         for (int index = 0; index < 4; index++) {
             ordered[index * 2] = corners[order[index] * 2];
             ordered[index * 2 + 1] = corners[order[index] * 2 + 1];

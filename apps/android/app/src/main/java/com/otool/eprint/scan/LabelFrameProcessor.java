@@ -8,6 +8,7 @@ import android.graphics.RectF;
 import android.view.TextureView;
 
 import com.otool.eprint.scan.opencv.OpenCVLabelRectifier;
+import com.otool.eprint.scan.opencv.LabelGlareReducer;
 
 /**
  * 标签抓帧处理流水线（android.graphics 适配层）：
@@ -35,16 +36,36 @@ public final class LabelFrameProcessor {
         public final boolean blurry;
         public final boolean croppedToLabel;
         public final boolean deskewed;
+        public final boolean perspectiveFixed;
+        public final String rectificationMethod;
+        public final double rectificationConfidence;
+        public final double rectificationRunnerUpGap;
+        public final boolean glareReductionRequested;
+        public final boolean glareReduced;
+        public final double glareVariationBefore;
+        public final double glareVariationAfter;
 
         ProcessedFrame(Bitmap bitmap, LabelImageAnalyzer.LabelRegion region,
                        double blurVariance, boolean blurry, boolean croppedToLabel,
-                       boolean deskewed) {
+                       boolean deskewed, boolean perspectiveFixed,
+                       String rectificationMethod, double rectificationConfidence,
+                       double rectificationRunnerUpGap,
+                       boolean glareReductionRequested, boolean glareReduced,
+                       double glareVariationBefore, double glareVariationAfter) {
             this.bitmap = bitmap;
             this.region = region;
             this.blurVariance = blurVariance;
             this.blurry = blurry;
             this.croppedToLabel = croppedToLabel;
             this.deskewed = deskewed;
+            this.perspectiveFixed = perspectiveFixed;
+            this.rectificationMethod = rectificationMethod;
+            this.rectificationConfidence = rectificationConfidence;
+            this.rectificationRunnerUpGap = rectificationRunnerUpGap;
+            this.glareReductionRequested = glareReductionRequested;
+            this.glareReduced = glareReduced;
+            this.glareVariationBefore = glareVariationBefore;
+            this.glareVariationAfter = glareVariationAfter;
         }
     }
 
@@ -84,6 +105,18 @@ public final class LabelFrameProcessor {
                                          float minimumCoverage,
                                          double blurVarianceThreshold,
                                          boolean perspectiveRectify) {
+        return process(frame, guide, cropToLabel, minimumCoverage, blurVarianceThreshold,
+                perspectiveRectify, false);
+    }
+
+    /**
+     * 完整标签图像流水线：几何定位结束后可做自适应反光抑制，再把同一结果交给两路 OCR。
+     */
+    public static ProcessedFrame process(Bitmap frame, RectF guide, boolean cropToLabel,
+                                         float minimumCoverage,
+                                         double blurVarianceThreshold,
+                                         boolean perspectiveRectify,
+                                         boolean reduceGlare) {
         int[] crop = LabelImageAnalyzer.guideCropRect(frame.getWidth(), frame.getHeight(),
                 guide.left, guide.top, guide.right, guide.bottom);
         Bitmap roi = Bitmap.createBitmap(frame, crop[0], crop[1],
@@ -107,15 +140,24 @@ public final class LabelFrameProcessor {
         boolean cropped = false;
         boolean deskewed = false;
         boolean opencvRectified = false;
-        if (cropToLabel && perspectiveRectify
-                && region.found && region.coverage >= minimumCoverage) {
-            // Java 分析确认贴纸占比可信后才尝试透视纠偏，避免 OpenCV 把背景误当标签。
-            Bitmap rectified = OpenCVLabelRectifier.rectify(roi);
+        boolean perspectiveFixed = false;
+        String rectificationMethod = "guide-roi";
+        double rectificationConfidence = 0;
+        double rectificationRunnerUpGap = 0;
+        if (cropToLabel && perspectiveRectify) {
+            // OpenCV 使用自身的多候选置信度门控。Java 与 OpenCV 阈值/分辨率不同，
+            // 不再用 Java 连通区作硬门，避免挡住本来可靠的四边形。
+            OpenCVLabelRectifier.RectificationResult rectified =
+                    OpenCVLabelRectifier.rectifyDetailed(roi);
             if (rectified != null) {
-                output = rectified;
+                output = rectified.bitmap;
                 cropped = true;
                 deskewed = true;
                 opencvRectified = true;
+                perspectiveFixed = rectified.perspectiveFixed;
+                rectificationMethod = rectified.method;
+                rectificationConfidence = rectified.confidence;
+                rectificationRunnerUpGap = rectified.runnerUpGap;
             }
         }
         if (!opencvRectified && region.found && region.coverage >= minimumCoverage) {
@@ -124,6 +166,10 @@ public final class LabelFrameProcessor {
                         ? maskAndCropPaperRegion(roi, regionCoordinates, region)
                         : cropToRegion(roi, regionCoordinates, region);
                 cropped = output != roi;
+                if (cropped) {
+                    rectificationMethod = paperReliable
+                            ? "java-paper-mask" : "java-bright-crop";
+                }
             }
             boolean needsDeskew = Math.abs(region.angleDegrees) >= DESKEW_MIN_ANGLE_DEGREES;
             boolean needsRecenter = Math.abs(region.offsetX) >= RECENTER_MIN_OFFSET
@@ -143,16 +189,32 @@ public final class LabelFrameProcessor {
                 canvas.drawBitmap(rotated, 0f, 0f, null);
                 output = white;
                 deskewed = true;
+                rectificationMethod += "+rotation";
             }
             if (!cropToLabel && needsRecenter) {
                 // 占比/偏移与分辨率无关，直接按 ROI 尺寸换算质心位置。
                 output = recenterOnRegion(output, region);
             }
         }
+        boolean glareReduced = false;
+        double glareVariationBefore = 0;
+        double glareVariationAfter = 0;
+        if (reduceGlare) {
+            LabelGlareReducer.Result glare = LabelGlareReducer.reduce(output);
+            glareVariationBefore = glare.beforeVariation;
+            glareVariationAfter = glare.afterVariation;
+            if (glare.applied) {
+                output = glare.bitmap;
+                glareReduced = true;
+            }
+        }
         double blurVariance = LabelImageAnalyzer.laplacianVariance(
                 LabelImageAnalyzer.downscale(toGrayImage(output), ANALYSIS_MAX_WIDTH));
         return new ProcessedFrame(output, region, blurVariance,
-                blurVariance < blurVarianceThreshold, cropped, deskewed);
+                blurVariance < blurVarianceThreshold, cropped, deskewed,
+                perspectiveFixed, rectificationMethod, rectificationConfidence,
+                rectificationRunnerUpGap, reduceGlare, glareReduced,
+                glareVariationBefore, glareVariationAfter);
     }
 
     /**
