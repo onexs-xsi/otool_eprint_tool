@@ -1,6 +1,6 @@
 package com.otool.eprint.model;
 
-/** 用户可按需启停的器件标签字段类别；模板仍决定该类别是否属于当前版式。 */
+/** 用户可按需自由搭配的器件标签字段；每套模板独立记忆选择，模板本身只决定布局。 */
 public final class ComponentFieldSelection {
     public final boolean model;
     public final boolean category;

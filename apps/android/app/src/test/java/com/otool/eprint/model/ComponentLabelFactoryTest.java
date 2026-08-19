@@ -15,7 +15,7 @@ import org.junit.Test;
 import java.util.Arrays;
 import java.util.Collections;
 
-/** 三档模板采用固定前缀列；缺值只留前缀，不输出采购与追溯信息。 */
+/** 模板只控制布局；字段可自由组合，空值行可选择保留或剔除。 */
 public class ComponentLabelFactoryTest {
     private static ComponentRecord mlccRecord() {
         return LabelTextParser.parse(Arrays.asList(
@@ -103,25 +103,29 @@ public class ComponentLabelFactoryTest {
     }
 
     @Test
-    public void compactUsesFourFixedPrefixesAndNeverIncludesLcscNumber() {
+    public void compactHonorsAllEnabledFieldsIncludingLcscNumber() {
         LabelDocument document = ComponentLabelFactory.create(mlccRecord(), 203, 25f, 15f,
                 ComponentTemplate.COMPACT, true, true, false);
-        assertEquals(8, countTextElements(document));
+        assertEquals(14, countTextElements(document));
         assertFixedPrefix(document, "component_model", "型号:");
         assertFixedPrefix(document, "component_category", "品类:");
         assertFixedPrefix(document, "component_spec", "规格:");
         assertFixedPrefix(document, "component_package", "封装:");
+        assertFixedPrefix(document, "component_brand", "品牌:");
+        assertFixedPrefix(document, "component_parameters", "参数:");
+        assertFixedPrefix(document, "component_supplier", "立创:");
         assertEquals("CGA0402C0G120J500GT", document.find("component_model").text);
-        assertFalse(allText(document).contains("C45359894"));
-        assertNull(document.find("component_supplier_prefix"));
+        assertEquals("C45359894", document.find("component_supplier").text);
         assertSingleLineFits(document);
         assertValueRowsDoNotOverlap(document);
     }
 
     @Test
     public void separatorsAlwaysBracketPrefixColumnAndHeadline() {
+        ComponentFieldSelection fourRows = new ComponentFieldSelection(
+                true, true, true, true, false, false, false);
         LabelDocument document = ComponentLabelFactory.create(mlccRecord(), 203, 25f, 15f,
-                ComponentTemplate.COMPACT, true, true, false);
+                ComponentTemplate.COMPACT, true, false, fourRows, true);
         TextElement vertical = document.find("component_sep_v");
         TextElement headline = document.find("component_sep_head");
         assertNotNull(vertical);
@@ -129,7 +133,7 @@ public class ComponentLabelFactoryTest {
         assertEquals(TextElement.TYPE_LINE, vertical.type);
         assertEquals("v", vertical.format);
         assertEquals("h", headline.format);
-        // 25×15 简洁 4 行 pitch≈3.5mm ≥2.8 → 行间横线也补齐
+        // 25×15 的 4 行布局 pitch≈3.5mm ≥2.8 → 行间横线也补齐
         assertNotNull(document.find("component_sep_r2"));
     }
 
@@ -142,14 +146,14 @@ public class ComponentLabelFactoryTest {
                 ComponentFieldSelection.defaults(), false);
         assertTrue(countLineElements(withLines) > 0);
         assertEquals(0, countLineElements(noLines));
-        assertEquals(8, countTextElements(noLines));
+        assertEquals(14, countTextElements(noLines));
         assertSingleLineFits(noLines);
         assertValueRowsDoNotOverlap(noLines);
     }
 
     @Test
     public void crampedLabelDropsLowPriorityFieldsUntilRowsFit() {
-        // 20×10 标准模板 6 候选行 → pitch 不足，依次丢 品牌→品类，保留 型号/规格/封装/立创
+        // 20×10、7 个候选字段 → 依次丢 参数→品牌→品类，保留 型号/规格/封装/立创
         LabelDocument document = ComponentLabelFactory.create(mlccRecord(), 203, 20f, 10f,
                 ComponentTemplate.STANDARD, true, true, false);
         assertNotNull(document.find("component_model"));
@@ -188,7 +192,7 @@ public class ComponentLabelFactoryTest {
         assertFixedPrefix(compact, "component_spec", "规格:");
         assertTrue(compact.find("component_model").text.isEmpty());
         assertTrue(compact.find("component_spec").text.isEmpty());
-        assertFalse(allText(compact).contains("C45359894"));
+        assertEquals("C45359894", compact.find("component_supplier").text);
     }
 
     @Test
@@ -200,6 +204,7 @@ public class ComponentLabelFactoryTest {
         assertFixedPrefix(document, "component_spec", "规格:");
         assertFixedPrefix(document, "component_package", "封装:");
         assertFixedPrefix(document, "component_brand", "品牌:");
+        assertFixedPrefix(document, "component_parameters", "参数:");
         assertFixedPrefix(document, "component_supplier", "立创:");
         assertEquals("C45359894", document.find("component_supplier").text);
         assertSingleLineFits(document);
@@ -234,8 +239,7 @@ public class ComponentLabelFactoryTest {
 
     @Test
     public void brandOptionRemovesTheWholeBrandRowOnlyWhenDisabled() {
-        for (ComponentTemplate template : Arrays.asList(
-                ComponentTemplate.STANDARD, ComponentTemplate.DETAILED)) {
+        for (ComponentTemplate template : ComponentTemplate.values()) {
             LabelDocument withBrand = ComponentLabelFactory.create(mlccRecord(), 203, 25f, 15f,
                     template, true, true, false);
             LabelDocument withoutBrand = ComponentLabelFactory.create(mlccRecord(), 203, 25f, 15f,
@@ -248,17 +252,69 @@ public class ComponentLabelFactoryTest {
     }
 
     @Test
-    public void fieldSelectionRemovesDisabledCategoriesFromDetailedTemplate() {
+    public void fieldSelectionRemovesDisabledCategoriesFromEveryTemplate() {
         ComponentFieldSelection fields = new ComponentFieldSelection(
                 true, false, true, false, false, false, true);
-        LabelDocument document = ComponentLabelFactory.create(mlccRecord(), 203, 25f, 15f,
-                ComponentTemplate.DETAILED, true, false, fields);
-        assertNotNull(document.find("component_model_prefix"));
-        assertNotNull(document.find("component_spec_prefix"));
-        assertNotNull(document.find("component_supplier_prefix"));
-        assertNull(document.find("component_category_prefix"));
-        assertNull(document.find("component_package_prefix"));
-        assertNull(document.find("component_brand_prefix"));
-        assertNull(document.find("component_parameters_prefix"));
+        for (ComponentTemplate template : ComponentTemplate.values()) {
+            LabelDocument document = ComponentLabelFactory.create(mlccRecord(), 203, 25f, 15f,
+                    template, true, false, fields);
+            assertNotNull(document.find("component_model_prefix"));
+            assertNotNull(document.find("component_spec_prefix"));
+            assertNotNull(document.find("component_supplier_prefix"));
+            assertNull(document.find("component_category_prefix"));
+            assertNull(document.find("component_package_prefix"));
+            assertNull(document.find("component_brand_prefix"));
+            assertNull(document.find("component_parameters_prefix"));
+        }
+    }
+
+    @Test
+    public void templatesKeepTheSameFreeFieldCombination() {
+        ComponentFieldSelection fields = new ComponentFieldSelection(
+                false, true, false, true, false, true, false);
+        for (ComponentTemplate template : ComponentTemplate.values()) {
+            LabelDocument document = ComponentLabelFactory.create(mlccRecord(), 203, 25f, 15f,
+                    template, false, false, fields, false);
+            assertEquals(6, countTextElements(document));
+            assertNotNull(document.find("component_category_prefix"));
+            assertNotNull(document.find("component_package_prefix"));
+            assertNotNull(document.find("component_parameters_prefix"));
+            assertNull(document.find("component_model_prefix"));
+            assertNull(document.find("component_spec_prefix"));
+            assertNull(document.find("component_brand_prefix"));
+            assertNull(document.find("component_supplier_prefix"));
+        }
+    }
+
+    @Test
+    public void removeBlankFieldsDropsOnlyRowsWhoseValueIsEmpty() {
+        LabelDocument kept = ComponentLabelFactory.create(mlccRecord(), 203, 40f, 30f,
+                ComponentTemplate.STANDARD, true, false,
+                ComponentFieldSelection.defaults(), true, false);
+        LabelDocument removed = ComponentLabelFactory.create(mlccRecord(), 203, 40f, 30f,
+                ComponentTemplate.STANDARD, true, false,
+                ComponentFieldSelection.defaults(), true, true);
+
+        assertNotNull(kept.find("component_parameters_prefix"));
+        assertTrue(kept.find("component_parameters").text.isEmpty());
+        assertNull(removed.find("component_parameters_prefix"));
+        assertNull(removed.find("component_parameters"));
+        assertNotNull(removed.find("component_model_prefix"));
+        assertNotNull(removed.find("component_supplier_prefix"));
+        assertEquals(countTextElements(kept) - 2, countTextElements(removed));
+    }
+
+    @Test
+    public void templateChangesLayoutDensityWithoutChangingFields() {
+        LabelDocument compact = ComponentLabelFactory.create(mlccRecord(), 203, 40f, 30f,
+                ComponentTemplate.COMPACT, false, false,
+                ComponentFieldSelection.defaults(), false);
+        LabelDocument detailed = ComponentLabelFactory.create(mlccRecord(), 203, 40f, 30f,
+                ComponentTemplate.DETAILED, false, false,
+                ComponentFieldSelection.defaults(), false);
+
+        assertEquals(countTextElements(compact), countTextElements(detailed));
+        assertTrue(compact.find("component_supplier").fontSizePt
+                < detailed.find("component_supplier").fontSizePt);
     }
 }

@@ -18,8 +18,21 @@ public final class ComponentRecordFusion {
      */
     public static ComponentRecord merge(ComponentRecord cascade, ComponentRecord glm,
                                         int fusionWeightLevel) {
-        if (cascade == null) return glm;
-        if (glm == null) return cascade;
+        return merge(cascade, glm, fusionWeightLevel, CategoryPackageMatcher.empty(), false);
+    }
+
+    /**
+     * 融合两路结果，并可让立创离线字典对“品类/封装/厂商”字段提供强证据。强权重只在
+     * 一侧命中字典、另一侧未命中时越过全局 OCR 权重，不影响型号、规格和立创料号。
+     */
+    public static ComponentRecord merge(ComponentRecord cascade, ComponentRecord glm,
+                                        int fusionWeightLevel,
+                                        CategoryPackageMatcher catalogMatcher,
+                                        boolean dictionaryStrongWeight) {
+        CategoryPackageMatcher catalog = catalogMatcher == null
+                ? CategoryPackageMatcher.empty() : catalogMatcher;
+        if (cascade == null) return dictionaryStrongWeight ? normalizeCatalogFields(glm, catalog) : glm;
+        if (glm == null) return dictionaryStrongWeight ? normalizeCatalogFields(cascade, catalog) : cascade;
         final boolean glmWinsConflict;
         switch (fusionWeightLevel) {
             case 1: glmWinsConflict = false; break;
@@ -40,11 +53,28 @@ public final class ComponentRecordFusion {
         keys.addAll(cascade.fields.keySet());
         keys.addAll(glm.fields.keySet());
         Map<String, String> fields = new LinkedHashMap<>();
+        FieldChoice categoryChoice = dictionaryStrongWeight
+                ? chooseCatalogField("品类", cascade.fields.get("品类"), glm.fields.get("品类"),
+                "", glmWinsConflict, catalog)
+                : new FieldChoice(choose(cascade.fields.get("品类"), glm.fields.get("品类"),
+                glmWinsConflict), false);
+        String selectedCategory = categoryChoice.value;
+        int dictionaryProtected = categoryChoice.protectedConflict ? 1 : 0;
         for (String key : keys) {
             String ppValue = cascade.fields.get(key);
             String glmValue = glm.fields.get(key);
             if (conflicts(ppValue, glmValue)) conflicts++;
-            String selected = choose(ppValue, glmValue, glmWinsConflict);
+            FieldChoice choice;
+            if ("品类".equals(key)) {
+                choice = categoryChoice;
+            } else if (dictionaryStrongWeight && isCatalogField(key)) {
+                choice = chooseCatalogField(key, ppValue, glmValue, selectedCategory,
+                        glmWinsConflict, catalog);
+            } else {
+                choice = new FieldChoice(choose(ppValue, glmValue, glmWinsConflict), false);
+            }
+            if (choice != categoryChoice && choice.protectedConflict) dictionaryProtected++;
+            String selected = choice.value;
             if (selected != null && !selected.trim().isEmpty()) fields.put(key, selected);
         }
 
@@ -59,12 +89,84 @@ public final class ComponentRecordFusion {
             warning.append("检测到 ").append(conflicts).append(" 项结果冲突，")
                     .append(conflictPolicyText(fusionWeightLevel));
         }
+        if (dictionaryProtected > 0) {
+            if (warning.length() > 0) warning.append("；");
+            warning.append("立创字典强权重保护 ").append(dictionaryProtected)
+                    .append(" 项品类/品牌/封装字段");
+        }
         SupplierFormat supplier = !supplierPart.isEmpty() ? SupplierFormat.LCSC
                 : glm.supplier != SupplierFormat.AUTO ? glm.supplier : cascade.supplier;
         return new ComponentRecord(supplier, !model.isEmpty() || !supplierPart.isEmpty(),
                 Math.max(0, Math.min(100, confidence)), "", supplierPart, model,
                 0, "", "PP-OCR:\n" + cascade.raw + "\nGLM-OCR:\n" + glm.raw,
                 fields, warning.toString());
+    }
+
+    private static boolean isCatalogField(String key) {
+        return "品类".equals(key) || "封装".equals(key)
+                || "厂商".equals(key) || "品牌".equals(key);
+    }
+
+    private static FieldChoice chooseCatalogField(String key, String cascade, String glm,
+                                                   String category, boolean preferGlm,
+                                                   CategoryPackageMatcher catalog) {
+        String ppValue = clean(cascade);
+        String glmValue = clean(glm);
+        String ppCanonical = canonicalCatalogValue(key, category, ppValue, catalog);
+        String glmCanonical = canonicalCatalogValue(key, category, glmValue, catalog);
+        boolean ppKnown = !ppCanonical.isEmpty();
+        boolean glmKnown = !glmCanonical.isEmpty();
+        boolean hasConflict = conflicts(ppValue, glmValue);
+
+        if (ppKnown && !glmKnown) {
+            return new FieldChoice(ppCanonical, hasConflict && !glmValue.isEmpty());
+        }
+        if (glmKnown && !ppKnown) {
+            return new FieldChoice(glmCanonical, hasConflict && !ppValue.isEmpty());
+        }
+        if (ppKnown && glmKnown) {
+            if (normalize(ppCanonical).equals(normalize(glmCanonical))) {
+                return new FieldChoice(preferGlm ? glmCanonical : ppCanonical, false);
+            }
+            return new FieldChoice(preferGlm ? glmCanonical : ppCanonical, false);
+        }
+        return new FieldChoice(choose(ppValue, glmValue, preferGlm), false);
+    }
+
+    private static String canonicalCatalogValue(String key, String category, String value,
+                                                CategoryPackageMatcher catalog) {
+        if (value.isEmpty()) return "";
+        if ("品类".equals(key)) return catalog.canonicalCategory(value);
+        if ("封装".equals(key)) return catalog.canonicalPackage(category, value);
+        if ("厂商".equals(key) || "品牌".equals(key)) {
+            return catalog.canonicalBrand(category, value);
+        }
+        return "";
+    }
+
+    private static ComponentRecord normalizeCatalogFields(ComponentRecord record,
+                                                          CategoryPackageMatcher catalog) {
+        if (record == null) return null;
+        Map<String, String> fields = new LinkedHashMap<>(record.fields);
+        String category = canonicalCatalogValue("品类", "", clean(fields.get("品类")), catalog);
+        if (!category.isEmpty()) fields.put("品类", category);
+        for (String key : new String[]{"封装", "厂商", "品牌"}) {
+            String canonical = canonicalCatalogValue(key, category, clean(fields.get(key)), catalog);
+            if (!canonical.isEmpty()) fields.put(key, canonical);
+        }
+        return new ComponentRecord(record.supplier, record.recognized, record.confidence,
+                record.orderNumber, record.supplierPartNumber, record.manufacturerPartNumber,
+                record.quantity, record.trackingId, record.raw, fields, record.warning);
+    }
+
+    private static final class FieldChoice {
+        final String value;
+        final boolean protectedConflict;
+
+        FieldChoice(String value, boolean protectedConflict) {
+            this.value = value;
+            this.protectedConflict = protectedConflict;
+        }
     }
 
     private static String conflictPolicyText(int fusionWeightLevel) {

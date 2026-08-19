@@ -15,7 +15,8 @@ public final class GlmInformationExtractionParser {
             "manufacturer_part_number", "lcsc_part_number", "category",
             "specification", "package", "brand", "parameters"
     };
-    private static final Pattern LCSC_PART = Pattern.compile("\\bC\\d{5,}\\b");
+    private static final Pattern LCSC_PART = Pattern.compile(
+            "(?<![A-Za-z0-9])C\\d{5,}(?![A-Za-z0-9])");
     private static final Pattern PACKAGE_VALUE = Pattern.compile(
             "(?i)^(?:SMD[-\\s]?)?(?:0[2346]0[23]|0805|1206|1210|2512)$"
                     + "|^(?:SOT|SOP|SSOP|TSSOP|QFN|DFN|BGA|LGA|DIP|TO)[-\\s]?\\w+$"

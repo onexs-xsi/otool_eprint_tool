@@ -47,53 +47,55 @@ public final class ComponentLabelFactory {
                                        ComponentTemplate template, boolean boldHeadline,
                                        boolean largeFont, ComponentFieldSelection fields,
                                        boolean separators) {
+        return create(record, dpi, widthMm, heightMm, template, boldHeadline, largeFont,
+                fields, separators, false);
+    }
+
+    /**
+     * 模板只控制版面密度，七类字段完全由 fields 决定；removeBlankFields 开启时，
+     * 值为空的字段在空间取舍和排版前整行剔除。
+     */
+    public static LabelDocument create(ComponentRecord record, int dpi,
+                                       float widthMm, float heightMm,
+                                       ComponentTemplate template, boolean boldHeadline,
+                                       boolean largeFont, ComponentFieldSelection fields,
+                                       boolean separators, boolean removeBlankFields) {
         LabelDocument document = new LabelDocument();
         document.widthMm = widthMm;
         document.heightMm = heightMm;
         document.dpi = dpi;
         document.elements.clear();
-        List<FieldRow> rows = templateRows(template, record, boldHeadline, fields);
-        layoutRows(document, rows, largeFont, separators);
+        List<FieldRow> rows = selectedRows(record, boldHeadline, fields);
+        if (removeBlankFields) removeBlankRows(rows);
+        layoutRows(document, rows, template, largeFont, separators);
         document.normalize();
         return document;
     }
 
-    /** 各模板候选行（含取舍优先级，priority 越小越先被丢）。 */
-    private static List<FieldRow> templateRows(ComponentTemplate template, ComponentRecord record,
-                                               boolean boldHeadline, ComponentFieldSelection fields) {
+    /** 所有模板共享字段集合；候选行仅由字段开关决定（priority 越小越先被丢）。 */
+    private static List<FieldRow> selectedRows(ComponentRecord record, boolean boldHeadline,
+                                               ComponentFieldSelection fields) {
         List<FieldRow> rows = new ArrayList<>();
         addBaseRows(rows, record, boldHeadline, fields);
-        switch (template) {
-            case DETAILED:
-                if (fields.brand) {
-                    rows.add(new FieldRow("component_brand", "品牌:", field(record, "厂商"),
-                            false, PRIORITY_BRAND));
-                }
-                if (fields.parameters) {
-                    rows.add(new FieldRow("component_parameters", "参数:", field(record, "参数"),
-                            false, PRIORITY_PARAMETERS));
-                }
-                if (fields.supplierPartNumber) {
-                    rows.add(new FieldRow("component_supplier", "立创:", record.supplierPartNumber,
-                            false, PRIORITY_SUPPLIER));
-                }
-                break;
-            case STANDARD:
-                if (fields.brand) {
-                    rows.add(new FieldRow("component_brand", "品牌:", field(record, "厂商"),
-                            false, PRIORITY_BRAND));
-                }
-                if (fields.supplierPartNumber) {
-                    rows.add(new FieldRow("component_supplier", "立创:", record.supplierPartNumber,
-                            false, PRIORITY_SUPPLIER));
-                }
-                break;
-            case COMPACT:
-            default:
-                // 简洁模板：固定前缀列的四项技术身份；任何情况下都不显示立创料号。
-                break;
+        if (fields.brand) {
+            rows.add(new FieldRow("component_brand", "品牌:", field(record, "厂商"),
+                    false, PRIORITY_BRAND));
+        }
+        if (fields.parameters) {
+            rows.add(new FieldRow("component_parameters", "参数:", field(record, "参数"),
+                    false, PRIORITY_PARAMETERS));
+        }
+        if (fields.supplierPartNumber) {
+            rows.add(new FieldRow("component_supplier", "立创:", record.supplierPartNumber,
+                    false, PRIORITY_SUPPLIER));
         }
         return rows;
+    }
+
+    private static void removeBlankRows(List<FieldRow> rows) {
+        for (int index = rows.size() - 1; index >= 0; index--) {
+            if (rows.get(index).value.trim().isEmpty()) rows.remove(index);
+        }
     }
 
     private static void addBaseRows(List<FieldRow> rows, ComponentRecord record,
@@ -136,7 +138,8 @@ public final class ComponentLabelFactory {
      * 行数超出最小行距时从低优先级字段开始取舍，直到放得下为止。
      */
     private static void layoutRows(LabelDocument document, List<FieldRow> rows,
-                                   boolean largeFont, boolean separators) {
+                                   ComponentTemplate template, boolean largeFont,
+                                   boolean separators) {
         float widthMm = document.widthMm;
         float heightMm = document.heightMm;
         float marginX = Math.max(0.25f, widthMm * 0.012f);
@@ -152,7 +155,8 @@ public final class ComponentLabelFactory {
         }
         float pitch = usableH / Math.max(1, kept.size());
         float valuePt = LabelDocument.clamp(
-                pitch * PT_PER_MM * PITCH_FILL * (largeFont ? 1.1f : 1f), MIN_FONT_PT, 24f);
+                pitch * PT_PER_MM * PITCH_FILL * templateFontScale(template)
+                        * (largeFont ? 1.1f : 1f), MIN_FONT_PT, 24f);
         float prefixPt = Math.max(4.2f, valuePt * 0.75f);
         // 前缀列宽按"3 个全角字符 + 呼吸位"实测自适应（所有前缀均为"XX："格式），
         // 上限 5.0mm：过宽的前缀列会把长型号逼进截断（实测 19 字符粗体 MPN 需要 ~19mm）。
@@ -174,6 +178,19 @@ public final class ComponentLabelFactory {
         }
         if (separators) {
             addSeparators(document, kept.size(), marginX, marginY, valueX - gapMm / 2f, pitch);
+        }
+    }
+
+    /** 三档模板只改变字号密度，不再增加、删除或锁定字段。 */
+    private static float templateFontScale(ComponentTemplate template) {
+        switch (template) {
+            case COMPACT:
+                return 0.92f;
+            case DETAILED:
+                return 1.08f;
+            case STANDARD:
+            default:
+                return 1f;
         }
     }
 

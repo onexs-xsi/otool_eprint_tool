@@ -921,7 +921,8 @@ public final class MainActivity extends AppCompatActivity {
                     width, height, templateController.componentTemplate(),
                     templateController.templateBoldHeadline(),
                     templateController.templateLargeFont(), templateController.templateFields(),
-                    templateController.templateSeparators());
+                    templateController.templateSeparators(),
+                    templateController.templateRemoveBlankFields());
             labelCanvas.setDocument(document);
             showSelectedElement(null);
         } else {

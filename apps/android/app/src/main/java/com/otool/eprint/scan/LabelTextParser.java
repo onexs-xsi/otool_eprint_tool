@@ -17,7 +17,10 @@ import java.util.regex.Pattern;
 public final class LabelTextParser {
     private static final Pattern INTERNAL_CODE =
             Pattern.compile("\\d{4}-[A-Z]-[A-Z0-9]{2,}-\\d{3}");
-    private static final Pattern LCSC_PART = Pattern.compile("\\bC\\d{5,}\\b");
+    // Android 的 Unicode 单词边界会把数字后的汉字视为同一词，导致 C2843785静 漏匹配。
+    // 这里仅禁止相邻 ASCII 字母数字，既能截出料号，又不会把它误当品牌候选。
+    private static final Pattern LCSC_PART = Pattern.compile(
+            "(?<![A-Za-z0-9])C\\d{5,}(?![A-Za-z0-9])");
     private static final Pattern QTY = Pattern.compile("QTY[:：]?\\s*(\\d+)", Pattern.CASE_INSENSITIVE);
     private static final Pattern SO_NUMBER = Pattern.compile("\\bSO\\d{10,}\\b");
     private static final Pattern LOT_NUMBER = Pattern.compile("^\\d{4}-\\d{4}$");
@@ -43,6 +46,12 @@ public final class LabelTextParser {
     private LabelTextParser() {}
 
     public static ComponentRecord parse(List<OcrLine> lines) {
+        return parse(lines, CategoryPackageMatcher.empty());
+    }
+
+    /** 使用立创离线品类目录约束封装；目录不可用时保持原有基础正则回退。 */
+    public static ComponentRecord parse(List<OcrLine> lines,
+                                        CategoryPackageMatcher packageMatcher) {
         List<OcrLine> ordered = readingOrder(lines);
         StringBuilder raw = new StringBuilder();
         for (OcrLine line : ordered) {
@@ -50,6 +59,7 @@ public final class LabelTextParser {
             raw.append(line.text);
         }
         List<String> texts = mergeResidualLines(ordered);
+        List<String> correctedTexts = new ArrayList<>();
 
         String internalCode = "";
         String supplierPart = "";
@@ -57,7 +67,7 @@ public final class LabelTextParser {
         String lotNumber = "";
         int quantity = 0;
         String spec = "";
-        String packageCode = "";
+        String fallbackPackageCode = "";
         String vendor = "";
         String category = "";
         String model = "";
@@ -66,6 +76,7 @@ public final class LabelTextParser {
         for (String original : texts) {
             String line = correctCommonMisreads(original.trim());
             if (line.isEmpty()) continue;
+            correctedTexts.add(line);
 
             Matcher internal = INTERNAL_CODE.matcher(line);
             if (internalCode.isEmpty() && internal.find()) {
@@ -125,12 +136,14 @@ public final class LabelTextParser {
                     specUnitCount = units;
                 }
                 Matcher pkg = PACKAGE_CODE.matcher(line);
-                if (packageCode.isEmpty() && pkg.find()) packageCode = pkg.group();
+                if (fallbackPackageCode.isEmpty() && pkg.find()) {
+                    fallbackPackageCode = pkg.group();
+                }
                 continue;
             }
             Matcher pkg = PACKAGE_CODE.matcher(line);
             if (pkg.find()) {
-                if (packageCode.isEmpty()) packageCode = pkg.group();
+                if (fallbackPackageCode.isEmpty()) fallbackPackageCode = pkg.group();
                 String packageOnly = pkg.group().replace("-", "").replace(" ", "");
                 String lineWithoutSeparators = line.replace("-", "").replace(" ", "");
                 if (lineWithoutSeparators.equalsIgnoreCase(packageOnly)) continue;
@@ -146,6 +159,28 @@ public final class LabelTextParser {
                     && line.length() > model.length()) {
                 model = line;
             }
+        }
+
+        CategoryPackageMatcher matcher = packageMatcher == null
+                ? CategoryPackageMatcher.empty() : packageMatcher;
+        String catalogCategory = matcher.canonicalCategory(category);
+        if (catalogCategory.isEmpty() && category.isEmpty()) {
+            catalogCategory = matcher.findCategory(correctedTexts);
+        }
+        if (!catalogCategory.isEmpty()) category = catalogCategory;
+
+        // 字典扫描所有独立行，而非只接受第一个“ASCII+中文”候选。这样即使料号旁粘了
+        // 一个汉字，也不会抢先覆盖后续真实品牌；命中后统一输出立创规范品牌名。
+        String catalogBrand = matcher.findBrand(category, correctedTexts);
+        if (catalogBrand.isEmpty()) catalogBrand = matcher.canonicalBrand(category, vendor);
+        if (!catalogBrand.isEmpty()) vendor = catalogBrand;
+
+        String packageCode;
+        if (matcher.hasCategory(category)) {
+            // 已知品类必须命中该品类允许集合；不再让全局四位数字白名单越权回填。
+            packageCode = matcher.findPackage(category, correctedTexts);
+        } else {
+            packageCode = fallbackPackageCode;
         }
 
         Map<String, String> fields = new LinkedHashMap<>();

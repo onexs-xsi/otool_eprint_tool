@@ -7,7 +7,7 @@ import java.util.regex.Pattern;
 
 /**
  * 结构化器件字段的单位排版：只处理“规格/参数”，避免把型号、料号或封装中的字母数字拆开。
- * 例如 {@code 0Ω333.333mW} → {@code 0 Ω 333.333 mW}。
+ * 例如 {@code 0Ω333.333mW} → {@code 0Ω 333.333mW}：只在单位后补空格，单位前不加。
  */
 public final class UnitSpacingFormatter {
     // 长单位必须放在短单位前；匹配后还会检查相邻字符，避免 VISHAY、ROHS 等单词误命中。
@@ -43,7 +43,7 @@ public final class UnitSpacingFormatter {
         if (value != null && !value.isEmpty()) fields.put(key, formatValue(value));
     }
 
-    /** 只在单位紧邻数字时插入空格，已有空格保持不变，重复调用结果稳定。 */
+    /** 只在单位后紧邻下一项数字时补空格；单位前不处理，重复调用结果稳定。 */
     static String formatValue(String value) {
         if (value == null || value.isEmpty()) return value == null ? "" : value;
         Matcher matcher = UNIT.matcher(value);
@@ -57,19 +57,14 @@ public final class UnitSpacingFormatter {
             // 单位任一侧若仍与拉丁单词相连，说明它位于型号/单词内部，而不是独立单位。
             // 典型反例：CRCW0603 中的末尾 W 不能被解释成瓦特。
             if (isAsciiLetter(before) || isAsciiLetter(after)) continue;
-            boolean numberBefore = Character.isDigit(before);
             boolean numberAfter = Character.isDigit(after)
                     || ((after == '+' || after == '-') && end + 1 < value.length()
                     && Character.isDigit(value.charAt(end + 1)));
-            if (!numberBefore && !numberAfter) continue;
+            if (!numberAfter) continue;
 
             output.append(value, copiedUntil, start);
-            if (numberBefore && output.length() > 0
-                    && !Character.isWhitespace(output.charAt(output.length() - 1))) {
-                output.append(' ');
-            }
             output.append(value, start, end);
-            if (numberAfter && !Character.isWhitespace(after)) output.append(' ');
+            if (!Character.isWhitespace(after)) output.append(' ');
             copiedUntil = end;
         }
         if (copiedUntil == 0) return value;

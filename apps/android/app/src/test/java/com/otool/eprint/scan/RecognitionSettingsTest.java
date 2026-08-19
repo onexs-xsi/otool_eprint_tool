@@ -19,6 +19,7 @@ public final class RecognitionSettingsTest {
         assertTrue(settings.perspectiveRectify);
         assertTrue(settings.reduceGlare);
         assertTrue(settings.spaceRecognizedUnits);
+        assertTrue(settings.dictionaryStrongWeight);
         assertEquals(2, settings.fusionWeightLevel);
         assertFalse(settings.maskCodesBeforeVlm);
         assertFalse(settings.experimentalWeakCodeMask);

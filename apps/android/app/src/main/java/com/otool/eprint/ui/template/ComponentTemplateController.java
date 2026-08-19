@@ -75,6 +75,7 @@ public final class ComponentTemplateController {
     private CheckBox templateBrandCheck;
     private CheckBox templateLargeFontCheck;
     private CheckBox templateSeparatorCheck;
+    private CheckBox templateRemoveBlankCheck;
     private CheckBox templateModelCheck;
     private CheckBox templateCategoryCheck;
     private CheckBox templateSpecCheck;
@@ -83,9 +84,9 @@ public final class ComponentTemplateController {
     private CheckBox templateSupplierCheck;
     private ComponentTemplate componentTemplate = ComponentTemplate.STANDARD;
     private boolean templateBoldHeadline = true;
-    private boolean templateShowBrand = true;
     private boolean templateLargeFont;
     private boolean templateSeparators = true;
+    private boolean templateRemoveBlankFields;
     private ComponentFieldSelection templateFields = ComponentFieldSelection.defaults();
     private boolean populatingTemplate;
 
@@ -97,11 +98,10 @@ public final class ComponentTemplateController {
         this.componentRecordSummary = componentRecordSummary;
         componentTemplate = ComponentTemplateStore.loadTemplate(activity);
         templateBoldHeadline = ComponentTemplateStore.loadBoldHeadline(activity);
-        templateShowBrand = ComponentTemplateStore.loadShowBrand(activity);
         templateLargeFont = ComponentTemplateStore.loadLargeFont(activity);
         templateSeparators = ComponentTemplateStore.loadSeparators(activity);
-        templateFields = ComponentTemplateStore.loadFields(activity);
-        templateShowBrand = templateFields.brand;
+        templateRemoveBlankFields = ComponentTemplateStore.loadRemoveBlankFields(activity);
+        templateFields = ComponentTemplateStore.loadFields(activity, componentTemplate);
         componentPanel = activity.findViewById(R.id.componentPanel);
         modeContextTitle = activity.findViewById(R.id.modeContextTitle);
         TextView offlineStatus = activity.findViewById(R.id.offlineStatus);
@@ -124,6 +124,10 @@ public final class ComponentTemplateController {
 
     public boolean templateSeparators() {
         return templateSeparators;
+    }
+
+    public boolean templateRemoveBlankFields() {
+        return templateRemoveBlankFields;
     }
 
     public ComponentFieldSelection templateFields() {
@@ -155,6 +159,7 @@ public final class ComponentTemplateController {
         templateBrandCheck = activity.findViewById(R.id.templateBrandCheck);
         templateLargeFontCheck = activity.findViewById(R.id.templateLargeFontCheck);
         templateSeparatorCheck = activity.findViewById(R.id.templateSeparatorCheck);
+        templateRemoveBlankCheck = activity.findViewById(R.id.templateRemoveBlankCheck);
         templateModelCheck = activity.findViewById(R.id.templateModelCheck);
         templateCategoryCheck = activity.findViewById(R.id.templateCategoryCheck);
         templateSpecCheck = activity.findViewById(R.id.templateSpecCheck);
@@ -216,6 +221,15 @@ public final class ComponentTemplateController {
                 regenerateComponentDocument();
             });
         }
+        if (templateRemoveBlankCheck != null) {
+            templateRemoveBlankCheck.setOnCheckedChangeListener((button, checked) -> {
+                if (populatingTemplate) return;
+                templateRemoveBlankFields = checked;
+                saveTemplateOptions();
+                renderTemplatePanel();
+                regenerateComponentDocument();
+            });
+        }
     }
 
     private void bindTemplateFieldChecks() {
@@ -227,11 +241,13 @@ public final class ComponentTemplateController {
             check.setOnCheckedChangeListener((button, checked) -> {
                 if (populatingTemplate) return;
                 templateFields = new ComponentFieldSelection(
-                        templateModelCheck.isChecked(), templateCategoryCheck.isChecked(),
-                        templateSpecCheck.isChecked(), templatePackageCheck.isChecked(),
-                        templateBrandCheck.isChecked(), templateParametersCheck.isChecked(),
-                        templateSupplierCheck.isChecked());
-                templateShowBrand = templateFields.brand;
+                        checked(templateModelCheck, templateFields.model),
+                        checked(templateCategoryCheck, templateFields.category),
+                        checked(templateSpecCheck, templateFields.specification),
+                        checked(templatePackageCheck, templateFields.packageName),
+                        checked(templateBrandCheck, templateFields.brand),
+                        checked(templateParametersCheck, templateFields.parameters),
+                        checked(templateSupplierCheck, templateFields.supplierPartNumber));
                 saveTemplateOptions();
                 renderTemplatePanel();
                 regenerateComponentDocument();
@@ -241,7 +257,10 @@ public final class ComponentTemplateController {
 
     private void selectTemplate(ComponentTemplate template) {
         if (componentTemplate == template) return;
+        // 先固化旧模板，再加载新模板自己的字段组合；切模板不携带、也不重置字段。
+        saveTemplateOptions();
         componentTemplate = template;
+        templateFields = ComponentTemplateStore.loadFields(activity, template);
         saveTemplateOptions();
         renderTemplatePanel();
         regenerateComponentDocument();
@@ -249,7 +268,8 @@ public final class ComponentTemplateController {
 
     private void saveTemplateOptions() {
         ComponentTemplateStore.save(activity, componentTemplate, templateBoldHeadline,
-                templateLargeFont, templateFields, templateSeparators);
+                templateLargeFont, templateFields, templateSeparators,
+                templateRemoveBlankFields);
     }
 
     public void renderTemplatePanel() {
@@ -257,9 +277,12 @@ public final class ComponentTemplateController {
         populatingTemplate = true;
         templateDescription.setText(componentTemplate.label + " · " + componentTemplate.description);
         if (templateBoldCheck != null) templateBoldCheck.setChecked(templateBoldHeadline);
-        if (templateBrandCheck != null) templateBrandCheck.setChecked(templateShowBrand);
+        if (templateBrandCheck != null) templateBrandCheck.setChecked(templateFields.brand);
         if (templateLargeFontCheck != null) templateLargeFontCheck.setChecked(templateLargeFont);
         if (templateSeparatorCheck != null) templateSeparatorCheck.setChecked(templateSeparators);
+        if (templateRemoveBlankCheck != null) {
+            templateRemoveBlankCheck.setChecked(templateRemoveBlankFields);
+        }
         if (templateModelCheck != null) templateModelCheck.setChecked(templateFields.model);
         if (templateCategoryCheck != null) templateCategoryCheck.setChecked(templateFields.category);
         if (templateSpecCheck != null) templateSpecCheck.setChecked(templateFields.specification);
@@ -294,9 +317,11 @@ public final class ComponentTemplateController {
         tile.setBackground(border);
         tile.setPadding(dp(4), dp(4), dp(4), dp(2));
 
+        ComponentFieldSelection previewFields = selected
+                ? templateFields : ComponentTemplateStore.loadFields(activity, template);
         LabelDocument previewDocument = ComponentLabelFactory.create(record, 203, 25f, 15f,
-                template, templateBoldHeadline, templateLargeFont, templateFields,
-                templateSeparators);
+                template, templateBoldHeadline, templateLargeFont, previewFields,
+                templateSeparators, templateRemoveBlankFields);
         ImageView image = new ImageView(activity);
         image.setImageBitmap(LabelBitmapRenderer.render(previewDocument));
         tile.addView(image, new LinearLayout.LayoutParams(
@@ -337,7 +362,8 @@ public final class ComponentTemplateController {
         LabelDocument created = ComponentLabelFactory.create(host.componentRecord(),
                 host.selectedProfile().dpi,
                 host.document().widthMm, host.document().heightMm, componentTemplate,
-                templateBoldHeadline, templateLargeFont, templateFields, templateSeparators);
+                templateBoldHeadline, templateLargeFont, templateFields, templateSeparators,
+                templateRemoveBlankFields);
         host.setDocument(created);
         host.labelCanvas().setDocument(created);
         // 不默认选中首元素：选择框与编辑面板等用户点按后再出现。
@@ -360,6 +386,10 @@ public final class ComponentTemplateController {
 
     private int dp(int value) {
         return Math.round(value * activity.getResources().getDisplayMetrics().density);
+    }
+
+    private static boolean checked(@Nullable CheckBox checkBox, boolean fallback) {
+        return checkBox == null ? fallback : checkBox.isChecked();
     }
 
     private void toast(String message) {

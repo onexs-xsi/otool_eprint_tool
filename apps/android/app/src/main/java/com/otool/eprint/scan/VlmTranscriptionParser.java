@@ -19,9 +19,14 @@ public final class VlmTranscriptionParser {
      * 不得用空记录冒充成功）。
      */
     public static ComponentRecord parse(String vlmText) {
+        return parse(vlmText, CategoryPackageMatcher.empty());
+    }
+
+    public static ComponentRecord parse(String vlmText,
+                                        CategoryPackageMatcher packageMatcher) {
         List<OcrLine> lines = toLines(vlmText);
         if (lines.isEmpty()) return null;
-        return LabelTextParser.parse(lines);
+        return LabelTextParser.parse(lines, packageMatcher);
     }
 
     /**

@@ -16,7 +16,7 @@ public final class GlmInformationExtractionParserTest {
     public void parsesCompleteMlccExtractionForAllTemplates() throws JSONException {
         String output = "```json\n{"
                 + "\"manufacturer_part_number\":\"CGA0402C0G120J500GT\","
-                + "\"lcsc_part_number\":\"C45359894\","
+                + "\"lcsc_part_number\":\"C45359894静\","
                 + "\"category\":\"贴片电容(MLCC)\","
                 + "\"specification\":\"12pF ±5% 50V\","
                 + "\"package\":\"0402\","

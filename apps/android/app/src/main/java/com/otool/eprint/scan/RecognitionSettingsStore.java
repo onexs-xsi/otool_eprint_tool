@@ -26,6 +26,8 @@ public final class RecognitionSettingsStore {
                 values.getBoolean("label_mask_codes", defaults.maskCodesBeforeVlm),
                 values.getBoolean("label_weak_code_mask", defaults.experimentalWeakCodeMask),
                 values.getBoolean("label_show_stages", defaults.showProcessingPreview),
+                values.getBoolean("label_dictionary_strong_weight",
+                        defaults.dictionaryStrongWeight),
                 fusionWeight,
                 values.getInt("label_min_coverage", defaults.minimumLabelCoveragePercent),
                 values.getInt("label_blur_threshold", defaults.blurVarianceThreshold),
@@ -57,6 +59,7 @@ public final class RecognitionSettingsStore {
                 .putBoolean("label_mask_codes", settings.maskCodesBeforeVlm)
                 .putBoolean("label_weak_code_mask", settings.experimentalWeakCodeMask)
                 .putBoolean("label_show_stages", settings.showProcessingPreview)
+                .putBoolean("label_dictionary_strong_weight", settings.dictionaryStrongWeight)
                 .putInt("label_fusion_weight", settings.fusionWeightLevel)
                 .putInt("label_min_coverage", settings.minimumLabelCoveragePercent)
                 .putInt("label_blur_threshold", settings.blurVarianceThreshold)

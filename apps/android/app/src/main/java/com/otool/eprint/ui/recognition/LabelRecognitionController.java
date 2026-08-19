@@ -25,9 +25,11 @@ import com.journeyapps.barcodescanner.DecoratedBarcodeView;
 import com.otool.eprint.R;
 import com.otool.eprint.scan.ComponentRecord;
 import com.otool.eprint.scan.ComponentRecordFusion;
+import com.otool.eprint.scan.CategoryPackageMatcher;
 import com.otool.eprint.scan.GlmInformationExtractionParser;
 import com.otool.eprint.scan.LabelFrameProcessor;
 import com.otool.eprint.scan.LabelTextParser;
+import com.otool.eprint.scan.LcscPackageCatalog;
 import com.otool.eprint.scan.RecognitionSettings;
 import com.otool.eprint.scan.ScanInputMode;
 import com.otool.eprint.scan.UnitSpacingFormatter;
@@ -247,13 +249,18 @@ public final class LabelRecognitionController {
         ocrRunning = true;
         setScanButtonBusy(true);
         ocrExecutor.execute(() -> {
+            // 首次在 OCR 后台线程加载 APK 内离线快照；识别阶段不联网。
+            CategoryPackageMatcher packageMatcher = LcscPackageCatalog.get(
+                    activity.getApplicationContext());
             OcrResult result = new OcrResult(new ArrayList<>(), 0, 0, 0, 0);
             ComponentRecord cascadeRecord = null;
             if (host.recognitionSettings().ppOcrEnabled) {
                 labelOcrEngine.load(activity.getApplicationContext());
                 if (labelOcrEngine.isReady()) {
                     result = labelOcrEngine.recognize(frame);
-                    if (!result.lines.isEmpty()) cascadeRecord = LabelTextParser.parse(result.lines);
+                    if (!result.lines.isEmpty()) {
+                        cascadeRecord = LabelTextParser.parse(result.lines, packageMatcher);
+                    }
                 } else if (!host.recognitionSettings().vlmEnabled) {
                     final String error = labelOcrEngine.initError();
                     activity.runOnUiThread(() -> failLabelProcessing(
@@ -265,7 +272,7 @@ public final class LabelRecognitionController {
             final ComponentRecord ppRecord = cascadeRecord;
             activity.runOnUiThread(() -> showCascadeOcrPreview(frame, cascade, ppRecord));
             if (host.recognitionSettings().vlmEnabled) {
-                runLabelVlm(frame, cascade, ppRecord);
+                runLabelVlm(frame, cascade, ppRecord, packageMatcher);
             } else {
                 activity.runOnUiThread(() -> {
                     if (ppRecord == null) {
@@ -281,7 +288,8 @@ public final class LabelRecognitionController {
 
     /** GLM-OCR 信息提取通道：码区遮盖 → 严格 JSON → 统一器件记录；失败不冒充成功。 */
     private void runLabelVlm(Bitmap frame, OcrResult cascade,
-                             ComponentRecord cascadeRecord) {
+                             ComponentRecord cascadeRecord,
+                             CategoryPackageMatcher packageMatcher) {
         vlmOcrEngine.load(activity.getApplicationContext());
         if (!vlmOcrEngine.isReady()) {
             final String reason = vlmOcrEngine.initError();
@@ -377,7 +385,7 @@ public final class LabelRecognitionController {
                 }
             } else {
                 // 默认转写模式：转写文本 → 规则归类（VLM 只负责读字，字段归属交给规则）。
-                parsed = VlmTranscriptionParser.parse(vlm.text);
+                parsed = VlmTranscriptionParser.parse(vlm.text, packageMatcher);
                 if (parsed == null) parseError = "转写文本为空或均为退化字符";
             }
         }
@@ -410,10 +418,14 @@ public final class LabelRecognitionController {
                 } else {
                     ComponentRecord finalRecord = ComponentRecordFusion.merge(
                             cascadeRecord, extractedRecord,
-                            host.recognitionSettings().fusionWeightLevel);
+                            host.recognitionSettings().fusionWeightLevel,
+                            packageMatcher,
+                            host.recognitionSettings().dictionaryStrongWeight);
                     finalizeLabelRecognition(finalRecord,
                             "双通道融合（权重 " + host.recognitionSettings().fusionWeightLevel
-                                    + " 档）· "
+                                    + " 档）· 字典强权重"
+                                    + (host.recognitionSettings().dictionaryStrongWeight
+                                    ? "开启" : "关闭") + " · "
                                     + (maskingEnabled ? "码区遮盖 " + maskedCount : "码区遮盖关闭")
                                     + " · " + vlm.timingSummary());
                     toast("VLM 识别完成：" + vlm.totalMs + "ms");

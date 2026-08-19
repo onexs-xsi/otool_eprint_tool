@@ -74,12 +74,50 @@ public final class ComponentRecordFusionTest {
         assertEquals("PP-MODEL", ComponentRecordFusion.merge(ppStrong, glm, 4).manufacturerPartNumber);
     }
 
+    @Test
+    public void dictionaryStrongWeightProtectsKnownBrandAndPackageOnly() {
+        CategoryPackageMatcher catalog = new CategoryPackageMatcher(java.util.Collections.singletonList(
+                new CategoryPackageMatcher.CategoryRule(
+                        "RGB LED(内置IC)", "RGB LEDs(Built-in IC)", "光电器件", "光电器件",
+                        java.util.Collections.singletonList("SMD5050"),
+                        java.util.Collections.singletonList("XINGLIGHT(成兴光)"))));
+        Map<String, String> ppFields = new LinkedHashMap<>();
+        ppFields.put("品类", "RGBLED(内置IC");
+        ppFields.put("封装", "SMD505O");
+        ppFields.put("厂商", "C2843785静");
+        Map<String, String> glmFields = new LinkedHashMap<>();
+        glmFields.put("品类", "RGB LED(内置IC)");
+        glmFields.put("封装", "SMD5050");
+        glmFields.put("厂商", "XINGLIGHT(成兴光)");
+        ComponentRecord pp = record(95, "PP-MODEL", ppFields);
+        ComponentRecord glm = record(55, "GLM-MODEL", glmFields);
+
+        ComponentRecord fused = ComponentRecordFusion.merge(pp, glm, 1, catalog, true);
+
+        assertEquals("PP-MODEL", fused.manufacturerPartNumber);
+        assertEquals("RGB LED(内置IC)", fused.fields.get("品类"));
+        assertEquals("SMD5050", fused.fields.get("封装"));
+        assertEquals("XINGLIGHT(成兴光)", fused.fields.get("厂商"));
+        assertTrue(fused.warning.contains("字典强权重保护 2 项"));
+
+        ComponentRecord reverse = ComponentRecordFusion.merge(glm, pp, 5, catalog, true);
+        assertEquals("PP-MODEL", reverse.manufacturerPartNumber);
+        assertEquals("SMD5050", reverse.fields.get("封装"));
+        assertEquals("XINGLIGHT(成兴光)", reverse.fields.get("厂商"));
+    }
+
     private static ComponentRecord record(int confidence, String model, String lcsc,
                                           String packageCode, String specification) {
         Map<String, String> fields = new LinkedHashMap<>();
         if (!packageCode.isEmpty()) fields.put("封装", packageCode);
         if (!specification.isEmpty()) fields.put("规格", specification);
         return new ComponentRecord(SupplierFormat.LCSC, true, confidence, "", lcsc,
+                model, 0, "", "raw", fields, "");
+    }
+
+    private static ComponentRecord record(int confidence, String model,
+                                          Map<String, String> fields) {
+        return new ComponentRecord(SupplierFormat.LCSC, true, confidence, "", "",
                 model, 0, "", "raw", fields, "");
     }
 }

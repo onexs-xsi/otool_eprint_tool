@@ -72,6 +72,26 @@ public final class LabelTextParserTest {
     }
 
     @Test
+    public void gluedChineseNoiseAfterLcscPartDoesNotStealBrand() {
+        CategoryPackageMatcher catalog = new CategoryPackageMatcher(Collections.singletonList(
+                new CategoryPackageMatcher.CategoryRule(
+                        "RGB LED(内置IC)", "RGB LEDs(Built-in IC)", "光电器件", "光电器件",
+                        Collections.singletonList("SMD5050"),
+                        Collections.singletonList("XINGLIGHT(成兴光)"))));
+        ComponentRecord record = LabelTextParser.parse(Arrays.asList(
+                new OcrLine("XL-5050RGBC-WS2812B", 0.97f, 40, 20, 420, 50),
+                new OcrLine("RGBLED(内置IC", 0.90f, 40, 60, 260, 90),
+                new OcrLine("SMD5050", 0.98f, 40, 100, 180, 130),
+                new OcrLine("C2843785静", 0.88f, 40, 140, 250, 170),
+                new OcrLine("XINGLIGHT(成兴光)", 0.96f, 40, 180, 320, 210)), catalog);
+
+        assertEquals("C2843785", record.supplierPartNumber);
+        assertEquals("RGB LED(内置IC)", record.fields.get("品类"));
+        assertEquals("SMD5050", record.fields.get("封装"));
+        assertEquals("XINGLIGHT(成兴光)", record.fields.get("厂商"));
+    }
+
+    @Test
     public void parsesMlccSampleFields() {
         ComponentRecord record = LabelTextParser.parse(sampleMlcc());
         assertEquals(SupplierFormat.LCSC, record.supplier);
@@ -141,5 +161,42 @@ public final class LabelTextParserTest {
                 new OcrLine("CGA0402C0G120J500GT", 0.98f, 40, 140, 440, 170)));
         assertTrue(record.recognized);
         assertTrue(record.warning.isEmpty());
+    }
+
+    @Test
+    public void categoryCatalogFinds0806ForPowerInductor() {
+        CategoryPackageMatcher matcher = new CategoryPackageMatcher(Arrays.asList(
+                new CategoryPackageMatcher.CategoryRule(
+                        "功率电感", "电感/线圈/变压器", "电感/线圈/变压器",
+                        Arrays.asList("0805", "0806")),
+                new CategoryPackageMatcher.CategoryRule(
+                        "贴片电阻", "电阻", "电阻",
+                        Arrays.asList("0402", "0603", "0805"))));
+        List<OcrLine> lines = Arrays.asList(
+                new OcrLine("C54557075", 0.99f, 20, 10, 180, 35),
+                new OcrLine("PCT201610-1R0-M", 0.98f, 20, 45, 300, 70),
+                new OcrLine("功率电感", 0.98f, 20, 80, 180, 105),
+                new OcrLine("1μH ±20% 3.5A", 0.96f, 20, 115, 260, 140),
+                // 数字之间的 O 先按既有误识规则纠正，再进入品类目录匹配。
+                new OcrLine("08O6", 0.99f, 20, 150, 100, 175));
+
+        ComponentRecord record = LabelTextParser.parse(lines, matcher);
+        assertEquals("功率电感", record.fields.get("品类"));
+        assertEquals("0806", record.fields.get("封装"));
+    }
+
+    @Test
+    public void knownCategoryRejectsLegacyRegexPackageOutsideCatalog() {
+        CategoryPackageMatcher matcher = new CategoryPackageMatcher(Collections.singletonList(
+                new CategoryPackageMatcher.CategoryRule(
+                        "功率电感", "电感/线圈/变压器", "电感/线圈/变压器",
+                        Collections.singletonList("0806"))));
+        ComponentRecord record = LabelTextParser.parse(Arrays.asList(
+                new OcrLine("C54557075", 0.99f, 20, 10, 180, 35),
+                new OcrLine("PCT201610-1R0-M", 0.98f, 20, 45, 300, 70),
+                new OcrLine("功率电感", 0.98f, 20, 80, 180, 105),
+                new OcrLine("0402", 0.99f, 20, 115, 100, 140)), matcher);
+
+        assertFalse(record.fields.containsKey("封装"));
     }
 }

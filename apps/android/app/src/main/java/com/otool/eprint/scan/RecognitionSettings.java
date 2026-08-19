@@ -12,6 +12,8 @@ public final class RecognitionSettings {
     public final boolean maskCodesBeforeVlm;
     public final boolean experimentalWeakCodeMask;
     public final boolean showProcessingPreview;
+    /** 立创目录命中时，让品类/品牌/封装证据越过普通双通道 OCR 权重。 */
+    public final boolean dictionaryStrongWeight;
     /**
      * PP-OCR / GLM-OCR 融合权重档位（1~5）：
      * 1=PP-OCR 为主（GLM 只补漏），2=PP 语义权重大，3=均衡按置信度，
@@ -42,7 +44,8 @@ public final class RecognitionSettings {
             boolean cropToLabel, boolean perspectiveRectify, boolean reduceGlare,
             boolean spaceRecognizedUnits, boolean maskCodesBeforeVlm,
             boolean experimentalWeakCodeMask, boolean showProcessingPreview,
-            int fusionWeightLevel, int minimumLabelCoveragePercent,
+            boolean dictionaryStrongWeight, int fusionWeightLevel,
+            int minimumLabelCoveragePercent,
             int blurVarianceThreshold, boolean qrEnabled, boolean qrContinuous,
             boolean qrTryHarder, boolean qrAlsoInverted, boolean qrExtendedFormats,
             boolean qrSuppressDuplicates, boolean barcodeEnabled,
@@ -60,6 +63,7 @@ public final class RecognitionSettings {
         this.maskCodesBeforeVlm = maskCodesBeforeVlm;
         this.experimentalWeakCodeMask = experimentalWeakCodeMask;
         this.showProcessingPreview = showProcessingPreview;
+        this.dictionaryStrongWeight = dictionaryStrongWeight;
         this.fusionWeightLevel = clamp(fusionWeightLevel, 1, 5);
         this.minimumLabelCoveragePercent = clamp(minimumLabelCoveragePercent, 10, 90);
         this.blurVarianceThreshold = clamp(blurVarianceThreshold, 10, 500);
@@ -85,7 +89,7 @@ public final class RecognitionSettings {
         // 无条件覆盖 PP 的正确结果；2 档下 GLM 只补漏、置信度翻倍才翻盘（实测见
         // docs/ocr_optimize_0819.md 回归 2）。
         return new RecognitionSettings(
-                true, true, true, true, true, true, true, false, false, true, 2, 20, 60,
+                true, true, true, true, true, true, true, false, false, true, true, 2, 20, 60,
                 true, true, true, true, false, true,
                 true, true, true, true, true, true, true, true);
     }

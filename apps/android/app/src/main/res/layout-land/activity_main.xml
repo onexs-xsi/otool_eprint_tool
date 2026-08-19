@@ -881,6 +881,15 @@
                                 android:layout_weight="1"
                                 android:text="分隔线"
                                 android:textSize="11sp" />
+
+                            <CheckBox
+                                android:id="@+id/templateRemoveBlankCheck"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1.4"
+                                android:singleLine="true"
+                                android:text="自动剔除空白项"
+                                android:textSize="11sp" />
                         </LinearLayout>
 
                         <TextView

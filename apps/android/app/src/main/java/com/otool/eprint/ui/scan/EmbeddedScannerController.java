@@ -370,7 +370,8 @@ public final class EmbeddedScannerController {
                 width, height,
                 templateController.componentTemplate(), templateController.templateBoldHeadline(),
                 templateController.templateLargeFont(), templateController.templateFields(),
-                templateController.templateSeparators());
+                templateController.templateSeparators(),
+                templateController.templateRemoveBlankFields());
         host.setDocument(created);
         host.labelCanvas().setDocument(created);
         // 不默认选中首元素：选择框等用户点按后再出现。

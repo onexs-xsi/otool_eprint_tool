@@ -63,7 +63,8 @@ public final class ModelConfigDialog {
 
         TextView overview = new TextView(activity);
         overview.setText("三种识别模式独立配置并持久化；每个工作页面也会分别记住最后使用的扫描档位。"
-                + " 标签处理固定在全部模型结束后才生成模板，冲突字段默认由 GLM-OCR 优先。");
+                + " 标签处理固定在全部模型结束后才生成模板；普通冲突按五档权重取舍，"
+                + "命中立创字典的品类、品牌和封装默认使用强证据保护。");
         overview.setTextColor(ContextCompat.getColor(activity, R.color.eprint_muted));
         overview.setPadding(dp(activity, 4), 0, dp(activity, 4), dp(activity, 8));
         root.addView(overview);
@@ -109,7 +110,7 @@ public final class ModelConfigDialog {
                 "自动抑制标签反光（局部光照均衡；默认开启）",
                 recognition.reduceGlare);
         CheckBox spaceUnits = addConfigCheck(activity, labelPage,
-                "识别后在数值与单位之间自动加空格（默认开启）",
+                "识别后仅在单位后自动加空格（默认开启）",
                 recognition.spaceRecognizedUnits);
         CheckBox maskCodes = addConfigCheck(activity, labelPage,
                 "实验：送入 GLM 前遮盖二维码/一维码（默认关闭）",
@@ -119,6 +120,9 @@ public final class ModelConfigDialog {
                 recognition.experimentalWeakCodeMask);
         CheckBox processingStages = addConfigCheck(activity, labelPage, "显示每一步实时处理图片",
                 recognition.showProcessingPreview);
+        CheckBox dictionaryStrongWeight = addConfigCheck(activity, labelPage,
+                "立创字典命中时显著提高品类/品牌/封装权重（默认开启）",
+                recognition.dictionaryStrongWeight);
         TextView fusionWeightLabel = new TextView(activity);
         fusionWeightLabel.setTextColor(ContextCompat.getColor(activity, R.color.eprint_text));
         SeekBar fusionWeight = new SeekBar(activity);
@@ -270,7 +274,8 @@ public final class ModelConfigDialog {
                                 perspectiveRectify.isChecked(),
                                 reduceGlare.isChecked(), spaceUnits.isChecked(),
                                 maskCodes.isChecked(), weakMask.isChecked(),
-                                processingStages.isChecked(), fusionWeight.getProgress() + 1,
+                                processingStages.isChecked(), dictionaryStrongWeight.isChecked(),
+                                fusionWeight.getProgress() + 1,
                                 integerInRange(minimumCoverage, 10, 90, "标签定位最低占比"),
                                 integerInRange(blurThreshold, 10, 500, "模糊提示阈值"),
                                 qrEnabled.isChecked(), qrContinuous.isChecked(),

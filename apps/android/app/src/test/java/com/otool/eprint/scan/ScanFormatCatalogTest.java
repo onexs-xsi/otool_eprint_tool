@@ -39,7 +39,7 @@ public final class ScanFormatCatalogTest {
                 d.labelEnabled, d.ppOcrEnabled, d.vlmEnabled, d.cropToLabel,
                 d.perspectiveRectify, d.reduceGlare, d.spaceRecognizedUnits,
                 d.maskCodesBeforeVlm, d.experimentalWeakCodeMask,
-                d.showProcessingPreview, d.fusionWeightLevel,
+                d.showProcessingPreview, d.dictionaryStrongWeight, d.fusionWeightLevel,
                 d.minimumLabelCoveragePercent, d.blurVarianceThreshold,
                 d.qrEnabled, d.qrContinuous, d.qrTryHarder, d.qrAlsoInverted,
                 true, d.qrSuppressDuplicates,
