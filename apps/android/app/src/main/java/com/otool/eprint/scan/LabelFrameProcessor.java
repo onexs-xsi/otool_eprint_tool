@@ -7,6 +7,8 @@ import android.graphics.Matrix;
 import android.graphics.RectF;
 import android.view.TextureView;
 
+import com.otool.eprint.scan.opencv.OpenCVLabelRectifier;
+
 /**
  * 标签抓帧处理流水线（android.graphics 适配层）：
  * 引导框 ROI 裁剪 → 降采样 → 灰度 → Otsu → 最大连通亮区评估 → 必要时二次裁剪+旋正。
@@ -71,6 +73,17 @@ public final class LabelFrameProcessor {
     public static ProcessedFrame process(Bitmap frame, RectF guide, boolean cropToLabel,
                                          float minimumCoverage,
                                          double blurVarianceThreshold) {
+        return process(frame, guide, cropToLabel, minimumCoverage, blurVarianceThreshold, true);
+    }
+
+    /**
+     * 可配置流水线：透视纠偏开启时优先用 OpenCV 四点透视拉正标签，
+     * 失败或关闭时回退下方纯 Java 的二次裁剪 + Matrix 旋正路径（保持不变）。
+     */
+    public static ProcessedFrame process(Bitmap frame, RectF guide, boolean cropToLabel,
+                                         float minimumCoverage,
+                                         double blurVarianceThreshold,
+                                         boolean perspectiveRectify) {
         int[] crop = LabelImageAnalyzer.guideCropRect(frame.getWidth(), frame.getHeight(),
                 guide.left, guide.top, guide.right, guide.bottom);
         Bitmap roi = Bitmap.createBitmap(frame, crop[0], crop[1],
@@ -93,7 +106,19 @@ public final class LabelFrameProcessor {
         Bitmap output = roi;
         boolean cropped = false;
         boolean deskewed = false;
-        if (region.found && region.coverage >= minimumCoverage) {
+        boolean opencvRectified = false;
+        if (cropToLabel && perspectiveRectify
+                && region.found && region.coverage >= minimumCoverage) {
+            // Java 分析确认贴纸占比可信后才尝试透视纠偏，避免 OpenCV 把背景误当标签。
+            Bitmap rectified = OpenCVLabelRectifier.rectify(roi);
+            if (rectified != null) {
+                output = rectified;
+                cropped = true;
+                deskewed = true;
+                opencvRectified = true;
+            }
+        }
+        if (!opencvRectified && region.found && region.coverage >= minimumCoverage) {
             if (cropToLabel) {
                 output = paperReliable
                         ? maskAndCropPaperRegion(roi, regionCoordinates, region)

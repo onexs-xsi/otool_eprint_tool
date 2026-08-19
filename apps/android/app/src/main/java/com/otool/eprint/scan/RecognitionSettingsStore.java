@@ -12,15 +12,19 @@ public final class RecognitionSettingsStore {
     public static RecognitionSettings load(Context context) {
         RecognitionSettings defaults = RecognitionSettings.defaults();
         SharedPreferences values = context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE);
+        // 旧布尔键迁移：label_glm_priority=true → 5（GLM 为主），false → 3（均衡）。
+        int fusionWeight = values.getInt("label_fusion_weight",
+                values.getBoolean("label_glm_priority", true) ? 5 : 3);
         return new RecognitionSettings(
                 values.getBoolean("label_enabled", defaults.labelEnabled),
                 values.getBoolean("label_pp_ocr", defaults.ppOcrEnabled),
                 values.getBoolean("label_vlm", defaults.vlmEnabled),
                 values.getBoolean("label_crop", defaults.cropToLabel),
+                values.getBoolean("label_perspective_rectify", defaults.perspectiveRectify),
                 values.getBoolean("label_mask_codes", defaults.maskCodesBeforeVlm),
                 values.getBoolean("label_weak_code_mask", defaults.experimentalWeakCodeMask),
                 values.getBoolean("label_show_stages", defaults.showProcessingPreview),
-                values.getBoolean("label_glm_priority", defaults.preferGlmOnConflict),
+                fusionWeight,
                 values.getInt("label_min_coverage", defaults.minimumLabelCoveragePercent),
                 values.getInt("label_blur_threshold", defaults.blurVarianceThreshold),
                 values.getBoolean("qr_enabled", defaults.qrEnabled),
@@ -45,10 +49,11 @@ public final class RecognitionSettingsStore {
                 .putBoolean("label_pp_ocr", settings.ppOcrEnabled)
                 .putBoolean("label_vlm", settings.vlmEnabled)
                 .putBoolean("label_crop", settings.cropToLabel)
+                .putBoolean("label_perspective_rectify", settings.perspectiveRectify)
                 .putBoolean("label_mask_codes", settings.maskCodesBeforeVlm)
                 .putBoolean("label_weak_code_mask", settings.experimentalWeakCodeMask)
                 .putBoolean("label_show_stages", settings.showProcessingPreview)
-                .putBoolean("label_glm_priority", settings.preferGlmOnConflict)
+                .putInt("label_fusion_weight", settings.fusionWeightLevel)
                 .putInt("label_min_coverage", settings.minimumLabelCoveragePercent)
                 .putInt("label_blur_threshold", settings.blurVarianceThreshold)
                 .putBoolean("qr_enabled", settings.qrEnabled)

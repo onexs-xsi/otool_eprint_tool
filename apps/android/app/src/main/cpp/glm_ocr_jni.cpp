@@ -169,7 +169,8 @@ Java_com_otool_eprint_scan_vlm_GlmOcrSession_nativeInit(JNIEnv* env, jobject thi
         LOGD("set_config applied: %s", configJsonStr.c_str());
     }
     if (!session->llm->load()) {
-        std::string err = "LLM load() failed: " + configPathStr;
+        // 附带生效配置便于经 logcat 定位后端/精度相关的加载失败（如 GPU 后端不支持当前量化）。
+        std::string err = "LLM load() failed: " + configPathStr + " config=" + configJsonStr;
         LOGE("%s", err.c_str());
         delete session->llm;
         delete session;

@@ -1,7 +1,6 @@
 package com.otool.eprint;
 
 import android.Manifest;
-import android.app.Dialog;
 import android.bluetooth.BluetoothAdapter;
 import android.content.ComponentName;
 import android.content.Context;
@@ -10,36 +9,19 @@ import android.content.ServiceConnection;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
-import android.graphics.Canvas;
-import android.graphics.Color;
-import android.graphics.Paint;
-import android.graphics.RectF;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.IBinder;
-import android.text.Editable;
-import android.text.InputType;
 import android.text.TextUtils;
-import android.text.TextWatcher;
 import android.text.method.ScrollingMovementMethod;
 import android.view.View;
-import android.view.ViewGroup;
-import android.view.TextureView;
-import android.view.Window;
-import android.view.WindowManager;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
-import android.widget.CheckBox;
 import android.widget.EditText;
-import android.widget.FrameLayout;
-import android.widget.HorizontalScrollView;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
-import android.widget.ListView;
-import android.widget.ScrollView;
-import android.widget.SeekBar;
 import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -57,25 +39,15 @@ import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
 
-import com.google.zxing.client.android.Intents;
-import com.google.zxing.DecodeHintType;
-import com.google.zxing.ResultPoint;
-import com.journeyapps.barcodescanner.BarcodeCallback;
-import com.journeyapps.barcodescanner.BarcodeResult;
 import com.journeyapps.barcodescanner.DecoratedBarcodeView;
-import com.journeyapps.barcodescanner.DefaultDecoderFactory;
 import com.journeyapps.barcodescanner.ScanContract;
-import com.journeyapps.barcodescanner.ScanIntentResult;
 import com.journeyapps.barcodescanner.ScanOptions;
 import com.otool.eprint.device.DeviceCandidate;
 import com.otool.eprint.device.DeviceCatalog;
 import com.otool.eprint.device.DeviceHistoryStore;
 import com.otool.eprint.device.DeviceSettingsStore;
-import com.otool.eprint.device.PaperType;
 import com.otool.eprint.device.PrinterIdentity;
 import com.otool.eprint.device.PrinterProfile;
-import com.otool.eprint.device.PrinterDiscoveryEngine;
-import com.otool.eprint.device.PrinterMatch;
 import com.otool.eprint.device.ProfileStore;
 import com.otool.eprint.device.TransportType;
 import com.otool.eprint.hardware.PrinterHardwareStatus;
@@ -83,79 +55,49 @@ import com.otool.eprint.job.PrintJob;
 import com.otool.eprint.job.PrintJobState;
 import com.otool.eprint.model.DocumentStore;
 import com.otool.eprint.model.ComponentLabelFactory;
-import com.otool.eprint.model.ComponentFieldSelection;
-import com.otool.eprint.model.ComponentTemplate;
-import com.otool.eprint.model.ComponentTemplateStore;
 import com.otool.eprint.model.LabelDocument;
 import com.otool.eprint.model.TextElement;
-import com.otool.eprint.model.TimeElementFormat;
 import com.otool.eprint.model.WorkMode;
 import com.otool.eprint.model.WorkModeStore;
 import com.otool.eprint.print.BluetoothPrinterManager;
 import com.otool.eprint.protocol.MonochromeRaster;
 import com.otool.eprint.protocol.ProtocolRegistry;
 import com.otool.eprint.protocol.ProtocolType;
-import com.otool.eprint.protocol.DothanCompressionMode;
 import com.otool.eprint.protocol.DothanJobOptions;
 import com.otool.eprint.protocol.DothanProtocolEncoder;
 import com.otool.eprint.protocol.DothanRasterTransform;
-import com.otool.eprint.render.BarcodeRasterizer;
-import com.otool.eprint.render.IconCatalog;
-import com.otool.eprint.render.ImageElementRenderer;
 import com.otool.eprint.render.LabelBitmapRenderer;
-import com.otool.eprint.scan.QrContentParser;
-import com.otool.eprint.scan.LabelFrameProcessor;
-import com.otool.eprint.scan.LabelTextParser;
-import com.otool.eprint.scan.ocr.LabelOcrEngine;
-import com.otool.eprint.scan.vlm.VlmOcrEngine;
-import com.otool.eprint.scan.vlm.VlmResult;
-import com.otool.eprint.scan.vlm.VlmSettings;
-import com.otool.eprint.scan.vlm.VlmSettingsStore;
-import com.otool.eprint.scan.vlm.BarcodeMasker;
-import com.otool.eprint.scan.ocr.OcrLine;
-import com.otool.eprint.scan.ocr.OcrResult;
-import com.otool.eprint.scan.ScanFormatCatalog;
 import com.otool.eprint.scan.ScanInputMode;
-import com.otool.eprint.scan.ComponentLabelParser;
 import com.otool.eprint.scan.ComponentRecord;
-import com.otool.eprint.scan.ComponentRecordFusion;
-import com.otool.eprint.scan.GlmInformationExtractionParser;
 import com.otool.eprint.scan.RecognitionSettings;
 import com.otool.eprint.scan.RecognitionSettingsStore;
 import com.otool.eprint.scan.ScanModeStore;
 import com.otool.eprint.scan.SupplierFormat;
+import com.otool.eprint.scan.opencv.OpenCVSupport;
 import com.otool.eprint.service.PrinterConnectionService;
 import com.otool.eprint.service.ConnectionPhase;
 import com.otool.eprint.service.ConnectionStatus;
+import com.otool.eprint.ui.config.ModelConfigDialog;
+import com.otool.eprint.ui.discovery.PrinterDiscoveryDialog;
+import com.otool.eprint.ui.editor.ElementEditorController;
+import com.otool.eprint.ui.profile.ProfileSettingsDialog;
+import com.otool.eprint.ui.recognition.LabelRecognitionController;
+import com.otool.eprint.ui.scan.EmbeddedScannerController;
+import com.otool.eprint.ui.template.ComponentTemplateController;
 import com.otool.eprint.view.BarcodeModeSwitch;
 import com.otool.eprint.view.LabelCanvasView;
 import com.otool.eprint.view.LabelGuideOverlay;
-import com.otool.eprint.view.SignatureView;
-
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.EnumMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicReference;
 
 public final class MainActivity extends AppCompatActivity {
     private static final int ACTION_NONE = 0;
     private static final int ACTION_CHOOSE_PRINTER = 1;
     private static final int ACTION_PRINT = 2;
-    private static final float NUDGE_STEP_MM = 0.5f;
     private static final String JOB_OPTIONS_PREFS = "eprint_dothan_job_options";
     private static final float[][] LABEL_SIZE_PRESETS = {
             {20f, 10f},
@@ -165,7 +107,6 @@ public final class MainActivity extends AppCompatActivity {
 
     private LabelDocument document;
     private WorkMode workMode;
-    private SupplierFormat supplierFormat = SupplierFormat.AUTO;
     private ComponentRecord componentRecord;
     private RecognitionSettings recognitionSettings;
     private PrinterProfile selectedProfile;
@@ -178,123 +119,323 @@ public final class MainActivity extends AppCompatActivity {
     private Button disconnectButton;
     private TextView profileSummary;
     private TextView compatibilityWarning;
-    private LinearLayout textEditorCard;
     private EditText widthInput;
     private EditText heightInput;
-    private EditText elementXInput;
-    private EditText elementYInput;
-    private EditText elementWidthInput;
-    private EditText elementHeightInput;
-    private EditText textInput;
-    private EditText fontSizeInput;
-    private CheckBox boldCheck;
     private TextView dpiSpinner;
     private Spinner profileSpinner;
     private Spinner labelSizeSpinner;
     private ArrayAdapter<String> labelSizeAdapter;
-    private Spinner alignmentSpinner;
-    private Spinner workModeSpinner;
     private Spinner supplierSpinner;
-    private TextView editorTitle;
-    private View rowFont;
-    private View rowBarcode;
-    private View rowQr;
-    private View rowCodeLayout;
-    private View rowLine;
-    private View rowRect;
-    private View rowTime;
-    private View rowArc;
-    private Spinner barcodeFormatSpinner;
-    private Spinner barcodeTextPositionSpinner;
-    private Spinner qrFormatSpinner;
-    private Spinner qrErrorCorrectionSpinner;
-    private Spinner codeQuietZoneSpinner;
-    private Spinner codeRotationSpinner;
-    private Spinner lineOrientationSpinner;
-    private Spinner arcDirectionSpinner;
-    private Spinner timeFormatSpinner;
-    private EditText lineWidthInput;
-    private EditText rectWidthInput;
-    private CheckBox rectFilledCheck;
-    private CheckBox lockCheck;
-    private View rowSerial;
-    private EditText serialValueInput;
-    private EditText serialStepInput;
-    private EditText serialDigitsInput;
-    private View undoButton;
-    private View redoButton;
-    private Button borderStyleButton;
-    private View rowImage;
-    private EditText imageWidthInput;
-    private EditText imageHeightInput;
-    private Spinner imageFitSpinner;
-    private View rowIcon;
-    private Spinner iconStyleSpinner;
-    private EditText iconLineWidthInput;
-    private View rowTable;
-    private EditText tableRowsInput;
-    private EditText tableColsInput;
-    private EditText tableLineWidthInput;
-    private final java.util.ArrayDeque<String> undoStack = new java.util.ArrayDeque<>();
-    private final java.util.ArrayDeque<String> redoStack = new java.util.ArrayDeque<>();
-    private String lastSnapshot;
-    private long lastSnapshotAt;
-    private boolean restoringSnapshot;
-    private LinearLayout componentPanel;
     private TextView componentRecordSummary;
-    private TextView modeContextTitle;
-    private TextView offlineStatus;
     private Button addTextButton;
-    private Button customLabelSizeButton;
     private Button printButton;
     private DecoratedBarcodeView barcodeScanner;
-    private TextView qrResultText;
-    private TextView qrParseSummary;
     private BarcodeModeSwitch scanModeSwitch;
-    private View normalReservedPanel;
-    private View componentReservedPanel;
-    private LinearLayout elementChipsRow;
-    private HorizontalScrollView elementChipsScroll;
-    private LinearLayout templateSelectorRow;
-    private TextView templateDescription;
-    private CheckBox templateBoldCheck;
-    private CheckBox templateBrandCheck;
-    private CheckBox templateLargeFontCheck;
-    private CheckBox templateModelCheck;
-    private CheckBox templateCategoryCheck;
-    private CheckBox templateSpecCheck;
-    private CheckBox templatePackageCheck;
-    private CheckBox templateParametersCheck;
-    private CheckBox templateSupplierCheck;
-    private ComponentTemplate componentTemplate = ComponentTemplate.STANDARD;
-    private boolean templateBoldHeadline = true;
-    private boolean templateShowBrand = true;
-    private boolean templateLargeFont;
-    private ComponentFieldSelection templateFields = ComponentFieldSelection.defaults();
-    private boolean populatingTemplate;
-    private final StringBuilder recognitionLog = new StringBuilder();
-    private String recognitionStream = "";
-    private String lastScannedContent = "";
-    private long lastScannedAt;
-    private boolean singleDecodeComplete;
-    private ScanInputMode scanInputMode = ScanInputMode.QR;
-    private boolean embeddedCameraActive = true;
-    private BarcodeCallback embeddedScanCallback;
+    private ElementEditorController elementEditorController;
+    private ComponentTemplateController templateController;
+    private EmbeddedScannerController scannerController;
     private LabelGuideOverlay labelGuideOverlay;
-    private ImageView processingPreview;
-    private TextView processingStageBadge;
-    private boolean cameraSuspendedForProcessing;
-    // 标签档最近一次抓帧的处理结果，作为 PP-OCR 与 GLM-OCR 的共同输入。
-    private Bitmap lastLabelFrame;
-    // PP-OCRv6 级联 OCR 引擎（阶段 2a）：单线程后台执行，切入标签档时预热加载。
-    private final LabelOcrEngine labelOcrEngine = new LabelOcrEngine();
-    // GLM-OCR VLM 引擎（阶段 2b）：开发阶段独立展示，不启用自动回退。
-    private final VlmOcrEngine vlmOcrEngine = new VlmOcrEngine();
-    /** 超时后 requestStop 生效的等待上限。 */
-    private static final long VLM_STOP_WAIT_MS = 10_000;
-    private final ExecutorService ocrExecutor = Executors.newSingleThreadExecutor();
-    private boolean ocrRunning;
-    private boolean populatingEditor;
+    private LabelRecognitionController recognitionController;
+    private final LabelRecognitionController.Host recognitionHost = new LabelRecognitionController.Host() {
+        @Override
+        public RecognitionSettings recognitionSettings() {
+            return recognitionSettings;
+        }
+
+        @Override
+        public ScanInputMode scanInputMode() {
+            return scannerController.scanInputMode();
+        }
+
+        @Override
+        public boolean embeddedCameraActive() {
+            return scannerController.embeddedCameraActive();
+        }
+
+        @Override
+        public void requestCameraPermission() {
+            cameraPermissionLauncher.launch(Manifest.permission.CAMERA);
+        }
+
+        @Override
+        public void startEmbeddedScanner() {
+            scannerController.startEmbeddedScanner();
+        }
+
+        @Override
+        public void startModeDecoding() {
+            scannerController.startModeDecoding();
+        }
+
+        @Override
+        public void applyScanInputModeUi() {
+            scannerController.applyScanInputModeUi();
+        }
+
+        @Override
+        public void updateScanButtonLabel() {
+            scannerController.updateScanButtonLabel();
+        }
+
+        @Override
+        public void setComponentRecord(ComponentRecord record) {
+            componentRecord = record;
+        }
+
+        @Override
+        public void regenerateComponentTemplateIfNeeded() {
+            if (workMode == WorkMode.COMPONENT_ORGANIZATION) {
+                templateController.renderTemplatePanel();
+                templateController.regenerateComponentDocument();
+            }
+        }
+    };
+
+    private final ElementEditorController.Host editorHost = new ElementEditorController.Host() {
+        @Override
+        public LabelDocument document() {
+            return document;
+        }
+
+        @Override
+        public void setDocument(LabelDocument value) {
+            document = value;
+        }
+
+        @Override
+        public WorkMode workMode() {
+            return workMode;
+        }
+
+        @Override
+        public PrinterProfile selectedProfile() {
+            return selectedProfile;
+        }
+
+        @Override
+        public SupplierFormat supplierFormat() {
+            return scannerController.supplierFormat();
+        }
+
+        @Override
+        public LabelCanvasView labelCanvas() {
+            return labelCanvas;
+        }
+
+        @Override
+        public void updateCompatibilityWarning() {
+            MainActivity.this.updateCompatibilityWarning();
+        }
+
+        @Override
+        public void refreshDocumentControls() {
+            MainActivity.this.refreshDocumentControls();
+        }
+
+        @Override
+        public void switchWorkMode(WorkMode selected) {
+            MainActivity.this.switchWorkMode(selected);
+        }
+
+        @Override
+        public void onSupplierFormatSelected(int position) {
+            scannerController.onSupplierFormatSelected(position);
+        }
+
+        @Override
+        public void selectCurrentProfileInSpinner() {
+            populatingProfile = true;
+            profileSpinner.setSelection(DeviceCatalog.indexOf(selectedProfile.id));
+            populatingProfile = false;
+        }
+
+        @Override
+        public void onProfileSpinnerSelected(int position) {
+            if (!populatingProfile) applyProfile(ProfileStore.load(MainActivity.this,
+                    DeviceCatalog.profiles().get(position)), false);
+        }
+
+        @Override
+        public void configureLabelSizeSpinner() {
+            MainActivity.this.configureLabelSizeSpinner();
+        }
+
+        @Override
+        public void requestScan() {
+            scannerController.requestScan();
+        }
+
+        @Override
+        public void requestPrint() {
+            requestBluetoothAction(ACTION_PRINT);
+        }
+
+        @Override
+        public void requestChoosePrinter() {
+            requestBluetoothAction(ACTION_CHOOSE_PRINTER);
+        }
+
+        @Override
+        public void showDiagnostics() {
+            MainActivity.this.showDiagnostics();
+        }
+
+        @Override
+        public void showProfileSettings() {
+            MainActivity.this.showProfileSettings();
+        }
+
+        @Override
+        public void showModelConfigDialog() {
+            MainActivity.this.showModelConfigDialog();
+        }
+
+        @Override
+        public void showCustomLabelSizeDialog() {
+            MainActivity.this.showCustomLabelSizeDialog();
+        }
+
+        @Override
+        public void applyCanvasSize() {
+            MainActivity.this.applyCanvasSize();
+        }
+
+        @Override
+        public void applyPreset(float widthMm, float heightMm) {
+            MainActivity.this.applyPreset(widthMm, heightMm);
+        }
+
+        @Override
+        public void showPreview() {
+            MainActivity.this.showPreview();
+        }
+
+        @Override
+        public void disconnectPrinter() {
+            if (printerService != null) printerService.disconnect();
+        }
+
+        @Override
+        public void cancelJob() {
+            if (printerService == null || !printerService.cancelActiveOrLastQueuedJob()) {
+                toast("当前没有可取消的任务");
+            } else {
+                toast("任务已取消；活动传输会重置通道");
+            }
+        }
+
+        @Override
+        public void retryJob() {
+            if (printerService == null || !printerService.retryLastFailedJob()) toast("没有可重试的失败任务");
+            else toast("失败任务已重新入队");
+        }
+
+        @Override
+        public void launchImagePicker() {
+            imagePickerLauncher.launch(new PickVisualMediaRequest.Builder()
+                    .setMediaType(ActivityResultContracts.PickVisualMedia.ImageOnly.INSTANCE)
+                    .build());
+        }
+    };
+
+    private final ComponentTemplateController.Host templateHost = new ComponentTemplateController.Host() {
+        @Override
+        public LabelDocument document() {
+            return document;
+        }
+
+        @Override
+        public void setDocument(LabelDocument value) {
+            document = value;
+        }
+
+        @Override
+        public WorkMode workMode() {
+            return workMode;
+        }
+
+        @Override
+        public PrinterProfile selectedProfile() {
+            return selectedProfile;
+        }
+
+        @Override
+        public ComponentRecord componentRecord() {
+            return componentRecord;
+        }
+
+        @Override
+        public LabelCanvasView labelCanvas() {
+            return labelCanvas;
+        }
+
+        @Override
+        public void showSelectedElement(@Nullable TextElement element) {
+            MainActivity.this.showSelectedElement(element);
+        }
+
+        @Override
+        public void refreshDocumentControls() {
+            MainActivity.this.refreshDocumentControls();
+        }
+
+        @Override
+        public void persistAndRedraw() {
+            MainActivity.this.persistAndRedraw();
+        }
+    };
+
+    private final EmbeddedScannerController.Host scannerHost = new EmbeddedScannerController.Host() {
+        @Override
+        public RecognitionSettings recognitionSettings() {
+            return recognitionSettings;
+        }
+
+        @Override
+        public WorkMode workMode() {
+            return workMode;
+        }
+
+        @Override
+        public PrinterProfile selectedProfile() {
+            return selectedProfile;
+        }
+
+        @Override
+        public LabelDocument document() {
+            return document;
+        }
+
+        @Override
+        public void setDocument(LabelDocument value) {
+            document = value;
+        }
+
+        @Override
+        public LabelCanvasView labelCanvas() {
+            return labelCanvas;
+        }
+
+        @Override
+        public void setComponentRecord(ComponentRecord record) {
+            componentRecord = record;
+        }
+
+        @Override
+        public void showSelectedElement(@Nullable TextElement element) {
+            MainActivity.this.showSelectedElement(element);
+        }
+
+        @Override
+        public void refreshDocumentControls() {
+            MainActivity.this.refreshDocumentControls();
+        }
+
+        @Override
+        public void persistAndRedraw() {
+            MainActivity.this.persistAndRedraw();
+        }
+    };
     private boolean populatingProfile;
     private boolean populatingLabelSize;
     private boolean serviceBound;
@@ -302,7 +443,6 @@ public final class MainActivity extends AppCompatActivity {
     private ConnectionStatus lastConnectionStatus = ConnectionStatus.idle();
     private PrinterHardwareStatus lastHardwareStatus;
     private String lastJobSummary = "";
-    private Dialog elementEditorDialog;
 
     private final PrinterConnectionService.Listener hardwareListener = new PrinterConnectionService.Listener() {
         @Override
@@ -361,18 +501,18 @@ public final class MainActivity extends AppCompatActivity {
     };
 
     private final ActivityResultLauncher<ScanOptions> scanLauncher = registerForActivityResult(
-            new ScanContract(), this::handleScanResult);
+            new ScanContract(), result -> scannerController.handleScanResult(result));
 
     private final ActivityResultLauncher<PickVisualMediaRequest> imagePickerLauncher =
             registerForActivityResult(new ActivityResultContracts.PickVisualMedia(), uri -> {
-                if (uri != null) importImageToSelected(uri);
+                if (uri != null) elementEditorController.importImageToSelected(uri);
             });
 
     private final ActivityResultLauncher<String> cameraPermissionLauncher = registerForActivityResult(
             new ActivityResultContracts.RequestPermission(), granted -> {
-                if (granted && barcodeScanner != null) startEmbeddedScanner();
-                else if (granted && scanInputMode == ScanInputMode.LABEL) toast("请横屏使用拍摄识别");
-                else if (granted) launchScanner();
+                if (granted && barcodeScanner != null) scannerController.startEmbeddedScanner();
+                else if (granted && scannerController.scanInputMode() == ScanInputMode.LABEL) toast("请横屏使用拍摄识别");
+                else if (granted) scannerController.launchScanner();
                 else toast("需要相机权限才能扫描二维码或条形码");
             });
 
@@ -418,33 +558,41 @@ public final class MainActivity extends AppCompatActivity {
         }
         setContentView(R.layout.activity_main);
 
+        // 预热 OpenCV native 加载，避免首次抓帧时阻塞；加载失败时相关增强路径自动回退 Java 实现。
+        OpenCVSupport.isAvailable();
+
         workMode = WorkModeStore.load(this);
         recognitionSettings = RecognitionSettingsStore.load(this);
-        scanInputMode = ScanModeStore.load(this, workMode);
         document = DocumentStore.load(this, workMode);
         selectedProfile = ProfileStore.load(this);
         document.dpi = selectedProfile.dpi;
         document.normalize();
-        componentTemplate = ComponentTemplateStore.loadTemplate(this);
-        templateBoldHeadline = ComponentTemplateStore.loadBoldHeadline(this);
-        templateShowBrand = ComponentTemplateStore.loadShowBrand(this);
-        templateLargeFont = ComponentTemplateStore.loadLargeFont(this);
-        templateFields = ComponentTemplateStore.loadFields(this);
-        templateShowBrand = templateFields.brand;
         bindViews();
+        recognitionController = new LabelRecognitionController(this, recognitionHost,
+                barcodeScanner, labelGuideOverlay,
+                findViewById(R.id.processingPreview), findViewById(R.id.processingStageBadge),
+                findViewById(R.id.qrResultText), findViewById(R.id.qrParseSummary),
+                componentRecordSummary);
+        elementEditorController = new ElementEditorController(this, editorHost);
+        templateController = new ComponentTemplateController(this, templateHost,
+                elementEditorController, componentRecordSummary);
+        scannerController = new EmbeddedScannerController(this, scannerHost,
+                recognitionController, templateController,
+                barcodeScanner, labelGuideOverlay, scanModeSwitch,
+                scanLauncher, cameraPermissionLauncher);
         applyEdgeToEdgeInsets();
         renderConnectionStatus();
-        configureEmbeddedScanner();
-        configureSpinners();
+        scannerController.configureEmbeddedScanner();
+        elementEditorController.configureSpinners();
         configureCanvas();
-        configureActions();
-        configureEditor();
-        configureTypeEditors();
-        configureReservedPanels();
+        elementEditorController.configureActions();
+        elementEditorController.configureEditor();
+        elementEditorController.configureTypeEditors();
+        templateController.configureReservedPanels();
         renderWorkMode();
         refreshDocumentControls();
         refreshProfileSummary();
-        refreshElementChips();
+        elementEditorController.refreshElementChips();
 
         TextElement initial = document.elements.isEmpty() ? null : document.elements.get(0);
         if (initial != null) labelCanvas.select(initial.id);
@@ -452,13 +600,7 @@ public final class MainActivity extends AppCompatActivity {
 
         Intent serviceIntent = new Intent(this, PrinterConnectionService.class);
         bindService(serviceIntent, hardwareServiceConnection, Context.BIND_AUTO_CREATE);
-        try {
-            lastSnapshot = document.toJson().toString();
-        } catch (org.json.JSONException ignored) {
-            lastSnapshot = null;
-        }
-        // 0 表示尚未开始修改分组，确保启动后的首次操作立即产生可撤销快照。
-        lastSnapshotAt = 0L;
+        elementEditorController.initHistory();
     }
 
     private void bindViews() {
@@ -470,82 +612,21 @@ public final class MainActivity extends AppCompatActivity {
         disconnectButton = findViewById(R.id.disconnectButton);
         profileSummary = findViewById(R.id.profileSummary);
         compatibilityWarning = findViewById(R.id.compatibilityWarning);
-        textEditorCard = findViewById(R.id.textEditorCard);
         widthInput = findViewById(R.id.widthInput);
         heightInput = findViewById(R.id.heightInput);
-        elementXInput = findViewById(R.id.elementXInput);
-        elementYInput = findViewById(R.id.elementYInput);
-        elementWidthInput = findViewById(R.id.elementWidthInput);
-        elementHeightInput = findViewById(R.id.elementHeightInput);
-        textInput = findViewById(R.id.textInput);
-        fontSizeInput = findViewById(R.id.fontSizeInput);
-        boldCheck = findViewById(R.id.boldCheck);
         dpiSpinner = findViewById(R.id.dpiSpinner);
         profileSpinner = findViewById(R.id.profileSpinner);
         labelSizeSpinner = findViewById(R.id.labelSizeSpinner);
-        alignmentSpinner = findViewById(R.id.alignmentSpinner);
-        editorTitle = findViewById(R.id.editorTitle);
-        rowFont = findViewById(R.id.rowFont);
-        rowBarcode = findViewById(R.id.rowBarcode);
-        rowQr = findViewById(R.id.rowQr);
-        rowCodeLayout = findViewById(R.id.rowCodeLayout);
-        rowLine = findViewById(R.id.rowLine);
-        rowRect = findViewById(R.id.rowRect);
-        rowTime = findViewById(R.id.rowTime);
-        rowArc = findViewById(R.id.rowArc);
-        barcodeFormatSpinner = findViewById(R.id.barcodeFormatSpinner);
-        barcodeTextPositionSpinner = findViewById(R.id.barcodeTextPositionSpinner);
-        qrFormatSpinner = findViewById(R.id.qrFormatSpinner);
-        qrErrorCorrectionSpinner = findViewById(R.id.qrErrorCorrectionSpinner);
-        codeQuietZoneSpinner = findViewById(R.id.codeQuietZoneSpinner);
-        codeRotationSpinner = findViewById(R.id.codeRotationSpinner);
-        lineOrientationSpinner = findViewById(R.id.lineOrientationSpinner);
-        arcDirectionSpinner = findViewById(R.id.arcDirectionSpinner);
-        timeFormatSpinner = findViewById(R.id.timeFormatSpinner);
-        lineWidthInput = findViewById(R.id.lineWidthInput);
-        rectWidthInput = findViewById(R.id.rectWidthInput);
-        rectFilledCheck = findViewById(R.id.rectFilledCheck);
-        lockCheck = findViewById(R.id.lockCheck);
-        rowSerial = findViewById(R.id.rowSerial);
-        serialValueInput = findViewById(R.id.serialValueInput);
-        serialStepInput = findViewById(R.id.serialStepInput);
-        serialDigitsInput = findViewById(R.id.serialDigitsInput);
-        undoButton = findViewById(R.id.undoButton);
-        redoButton = findViewById(R.id.redoButton);
-        borderStyleButton = findViewById(R.id.borderCycleButton);
-        rowImage = findViewById(R.id.rowImage);
-        imageWidthInput = findViewById(R.id.imageWidthInput);
-        imageHeightInput = findViewById(R.id.imageHeightInput);
-        imageFitSpinner = findViewById(R.id.imageFitSpinner);
-        rowIcon = findViewById(R.id.rowIcon);
-        iconStyleSpinner = findViewById(R.id.iconStyleSpinner);
-        iconLineWidthInput = findViewById(R.id.iconLineWidthInput);
-        rowTable = findViewById(R.id.rowTable);
-        tableRowsInput = findViewById(R.id.tableRowsInput);
-        tableColsInput = findViewById(R.id.tableColsInput);
-        tableLineWidthInput = findViewById(R.id.tableLineWidthInput);
         barcodeScanner = findViewById(R.id.barcodeScanner);
-        qrResultText = findViewById(R.id.qrResultText);
-        qrParseSummary = findViewById(R.id.qrParseSummary);
         scanModeSwitch = findViewById(R.id.scanModeSwitch);
         labelGuideOverlay = findViewById(R.id.labelGuideOverlay);
-        processingPreview = findViewById(R.id.processingPreview);
-        processingStageBadge = findViewById(R.id.processingStageBadge);
-        workModeSpinner = findViewById(R.id.workModeSpinner);
         supplierSpinner = findViewById(R.id.supplierSpinner);
-        componentPanel = findViewById(R.id.componentPanel);
         componentRecordSummary = findViewById(R.id.componentRecordSummary);
         if (componentRecordSummary != null) {
             componentRecordSummary.setMovementMethod(new ScrollingMovementMethod());
         }
-        modeContextTitle = findViewById(R.id.modeContextTitle);
-        offlineStatus = findViewById(R.id.offlineStatus);
         addTextButton = findViewById(R.id.addTextButton);
-        customLabelSizeButton = findViewById(R.id.customLabelSizeButton);
         printButton = findViewById(R.id.printButton);
-        if (offlineStatus != null) {
-            offlineStatus.setText("● v" + BuildConfig.VERSION_NAME + " · 本机离线工作");
-        }
     }
 
     private void applyEdgeToEdgeInsets() {
@@ -650,260 +731,6 @@ public final class MainActivity extends AppCompatActivity {
         return TransportType.BLE_GATT;
     }
 
-    private void configureEmbeddedScanner() {
-        if (scanModeSwitch != null) {
-            scanModeSwitch.setMode(scanInputMode);
-            scanModeSwitch.setOnModeChangedListener(this::changeScanMode);
-        }
-        if (barcodeScanner == null) {
-            updateScanButtonLabel();
-            return;
-        }
-        barcodeScanner.setStatusText("");
-        embeddedScanCallback = new BarcodeCallback() {
-            @Override
-            public void barcodeResult(BarcodeResult result) {
-                String text = result == null ? null : result.getText();
-                long now = System.currentTimeMillis();
-                if (text == null || text.trim().isEmpty()) return;
-                if (recognitionSettings.suppressDuplicates(scanInputMode)
-                        && text.equals(lastScannedContent) && now - lastScannedAt < 2500L) return;
-                showCodeProcessingPreview(result);
-                consumeScannedContent(text);
-                if (!recognitionSettings.isContinuous(scanInputMode)) {
-                    singleDecodeComplete = true;
-                    updateScanButtonLabel();
-                }
-            }
-
-            @Override
-            public void possibleResultPoints(List<ResultPoint> resultPoints) {}
-        };
-        applyDecoderFormats();
-        startModeDecoding();
-        applyScanInputModeUi();
-    }
-
-    private void changeScanMode(ScanInputMode mode) {
-        if (workMode == WorkMode.NORMAL && mode == ScanInputMode.LABEL) mode = ScanInputMode.QR;
-        scanInputMode = mode;
-        ScanModeStore.save(this, workMode, mode);
-        lastScannedContent = "";
-        singleDecodeComplete = false;
-        if (mode == ScanInputMode.LABEL) {
-            // 标签档暂停 ZXing 连续解码（保留预览供抓帧），避免二维码抢跑结束。
-            if (barcodeScanner != null) barcodeScanner.getBarcodeView().stopDecoding();
-            prepareFinalRecognitionArea(mode);
-            // 后台预热 OCR 模型，首次拍摄不必等待加载。
-            warmUpLabelOcr();
-        } else {
-            applyDecoderFormats();
-            startModeDecoding();
-            prepareFinalRecognitionArea(mode);
-        }
-        resetRecognitionLog(mode.label + "识别已就绪");
-        applyScanInputModeUi();
-        toast("已切换到" + mode.label + "识别");
-    }
-
-    private void applyScanInputModeUi() {
-        if (labelGuideOverlay != null) {
-            labelGuideOverlay.setVisibility(
-                    scanInputMode == ScanInputMode.LABEL && !cameraSuspendedForProcessing
-                            ? View.VISIBLE : View.GONE);
-        }
-        updateScanButtonLabel();
-    }
-
-    private void updateScanButtonLabel() {
-        View button = findViewById(R.id.scanButton);
-        if (!(button instanceof Button)) return;
-        boolean modeEnabled = recognitionSettings == null
-                || recognitionSettings.isModeEnabled(scanInputMode);
-        button.setEnabled(modeEnabled && !ocrRunning);
-        if (!modeEnabled) {
-            ((Button) button).setText(scanInputMode.label + "已禁用");
-            return;
-        }
-        if (scanInputMode == ScanInputMode.LABEL) {
-            ((Button) button).setText("拍摄识别");
-        } else if (barcodeScanner != null) {
-            if (embeddedCameraActive && singleDecodeComplete
-                    && !recognitionSettings.isContinuous(scanInputMode)) {
-                ((Button) button).setText("再次识别");
-            } else {
-                ((Button) button).setText(embeddedCameraActive ? "暂停摄像头" : "启动摄像头");
-            }
-        } else {
-            ((Button) button).setText("摄像头扫描");
-        }
-    }
-
-    private void applyDecoderFormats() {
-        if (barcodeScanner == null || scanInputMode == ScanInputMode.LABEL) return;
-        EnumMap<DecodeHintType, Object> hints = new EnumMap<>(DecodeHintType.class);
-        if (recognitionSettings.tryHarder(scanInputMode)) {
-            hints.put(DecodeHintType.TRY_HARDER, Boolean.TRUE);
-        }
-        if (recognitionSettings.alsoInverted(scanInputMode)) {
-            hints.put(DecodeHintType.ALSO_INVERTED, Boolean.TRUE);
-        }
-        barcodeScanner.getBarcodeView().setDecoderFactory(new DefaultDecoderFactory(
-                ScanFormatCatalog.formats(scanInputMode, recognitionSettings),
-                hints, null, Intents.Scan.MIXED_SCAN));
-    }
-
-    private void startModeDecoding() {
-        if (barcodeScanner == null || embeddedScanCallback == null
-                || scanInputMode == ScanInputMode.LABEL
-                || !recognitionSettings.isModeEnabled(scanInputMode)
-                || !embeddedCameraActive) {
-            if (barcodeScanner != null) barcodeScanner.getBarcodeView().stopDecoding();
-            return;
-        }
-        if (recognitionSettings.isContinuous(scanInputMode)) {
-            barcodeScanner.decodeContinuous(embeddedScanCallback);
-        } else {
-            barcodeScanner.decodeSingle(embeddedScanCallback);
-        }
-    }
-
-    private void configureSpinners() {
-        if (workModeSpinner != null) {
-            ArrayAdapter<WorkMode> modeAdapter = new ArrayAdapter<>(this,
-                    android.R.layout.simple_spinner_item, WorkMode.values());
-            modeAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-            workModeSpinner.setAdapter(modeAdapter);
-            workModeSpinner.setSelection(workMode.ordinal());
-            workModeSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-                @Override public void onItemSelected(AdapterView<?> parent, View view,
-                                                     int position, long id) {
-                    WorkMode selected = WorkMode.values()[position];
-                    if (selected != workMode) switchWorkMode(selected);
-                }
-                @Override public void onNothingSelected(AdapterView<?> parent) {}
-            });
-        }
-        if (supplierSpinner != null) {
-            ArrayAdapter<SupplierFormat> supplierAdapter = new ArrayAdapter<>(this,
-                    android.R.layout.simple_spinner_item, SupplierFormat.values());
-            supplierAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-            supplierSpinner.setAdapter(supplierAdapter);
-            supplierSpinner.setSelection(supplierFormat.ordinal());
-            supplierSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-                @Override public void onItemSelected(AdapterView<?> parent, View view,
-                                                     int position, long id) {
-                    supplierFormat = SupplierFormat.values()[position];
-                    if (workMode == WorkMode.COMPONENT_ORGANIZATION
-                            && !lastScannedContent.isEmpty()) {
-                        applyComponentScan(lastScannedContent, false);
-                    }
-                }
-                @Override public void onNothingSelected(AdapterView<?> parent) {}
-            });
-        }
-        if (dpiSpinner != null) dpiSpinner.setText(selectedProfile.dpi + " DPI");
-
-        ArrayAdapter<String> alignmentAdapter = new ArrayAdapter<>(this,
-                android.R.layout.simple_spinner_item, new String[]{"左对齐", "居中", "右对齐"});
-        alignmentAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        alignmentSpinner.setAdapter(alignmentAdapter);
-
-        if (barcodeFormatSpinner != null) {
-            ArrayAdapter<String> barcodeAdapter = new ArrayAdapter<>(this,
-                    android.R.layout.simple_spinner_item,
-                    BarcodeRasterizer.BARCODE_FORMAT_LABELS);
-            barcodeAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-            barcodeFormatSpinner.setAdapter(barcodeAdapter);
-        }
-        if (barcodeTextPositionSpinner != null) {
-            ArrayAdapter<String> textPositionAdapter = new ArrayAdapter<>(this,
-                    android.R.layout.simple_spinner_item,
-                    new String[]{"不显示", "上方显示", "下方显示"});
-            textPositionAdapter.setDropDownViewResource(
-                    android.R.layout.simple_spinner_dropdown_item);
-            barcodeTextPositionSpinner.setAdapter(textPositionAdapter);
-        }
-        if (qrFormatSpinner != null) {
-            ArrayAdapter<String> qrFormatAdapter = new ArrayAdapter<>(this,
-                    android.R.layout.simple_spinner_item,
-                    BarcodeRasterizer.TWO_DIMENSIONAL_FORMAT_LABELS);
-            qrFormatAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-            qrFormatSpinner.setAdapter(qrFormatAdapter);
-        }
-        if (lineOrientationSpinner != null) {
-            ArrayAdapter<String> orientationAdapter = new ArrayAdapter<>(this,
-                    android.R.layout.simple_spinner_item, new String[]{"横向", "纵向"});
-            orientationAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-            lineOrientationSpinner.setAdapter(orientationAdapter);
-        }
-        if (timeFormatSpinner != null) {
-            ArrayAdapter<TimeElementFormat> timeAdapter = new ArrayAdapter<>(this,
-                    android.R.layout.simple_spinner_item, TimeElementFormat.values());
-            timeAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-            timeFormatSpinner.setAdapter(timeAdapter);
-        }
-        if (qrErrorCorrectionSpinner != null) {
-            ArrayAdapter<String> qrCorrectionAdapter = new ArrayAdapter<>(this,
-                    android.R.layout.simple_spinner_item,
-                    new String[]{"L · 低", "M · 中", "Q · 高", "H · 最高"});
-            qrCorrectionAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-            qrErrorCorrectionSpinner.setAdapter(qrCorrectionAdapter);
-        }
-        if (codeQuietZoneSpinner != null) {
-            ArrayAdapter<String> quietZoneAdapter = new ArrayAdapter<>(this,
-                    android.R.layout.simple_spinner_item,
-                    new String[]{"0 码元", "2 码元", "4 码元"});
-            quietZoneAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-            codeQuietZoneSpinner.setAdapter(quietZoneAdapter);
-        }
-        if (codeRotationSpinner != null) {
-            ArrayAdapter<String> rotationAdapter = new ArrayAdapter<>(this,
-                    android.R.layout.simple_spinner_item,
-                    new String[]{"0°", "90°", "180°", "270°"});
-            rotationAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-            codeRotationSpinner.setAdapter(rotationAdapter);
-        }
-        if (arcDirectionSpinner != null) {
-            ArrayAdapter<String> arcAdapter = new ArrayAdapter<>(this,
-                    android.R.layout.simple_spinner_item, new String[]{"上弧 ∩", "下弧 ∪"});
-            arcAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-            arcDirectionSpinner.setAdapter(arcAdapter);
-        }
-        if (imageFitSpinner != null) {
-            ArrayAdapter<String> fitAdapter = new ArrayAdapter<>(this,
-                    android.R.layout.simple_spinner_item, ImageElementRenderer.FIT_MODE_LABELS);
-            fitAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-            imageFitSpinner.setAdapter(fitAdapter);
-        }
-        if (iconStyleSpinner != null) {
-            ArrayAdapter<String> iconAdapter = new ArrayAdapter<>(this,
-                    android.R.layout.simple_spinner_item, IconCatalog.LABELS);
-            iconAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-            iconStyleSpinner.setAdapter(iconAdapter);
-        }
-
-        ArrayAdapter<PrinterProfile> profileAdapter = new ArrayAdapter<>(this,
-                R.layout.spinner_item_compact, DeviceCatalog.profiles());
-        profileAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        profileSpinner.setAdapter(profileAdapter);
-        populatingProfile = true;
-        profileSpinner.setSelection(DeviceCatalog.indexOf(selectedProfile.id));
-        populatingProfile = false;
-        profileSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-            @Override
-            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-                if (!populatingProfile) applyProfile(ProfileStore.load(MainActivity.this,
-                        DeviceCatalog.profiles().get(position)), false);
-            }
-
-            @Override
-            public void onNothingSelected(AdapterView<?> parent) {}
-        });
-
-        configureLabelSizeSpinner();
-    }
-
     private void configureLabelSizeSpinner() {
         if (labelSizeSpinner == null) return;
         labelSizeAdapter = new ArrayAdapter<>(this, R.layout.spinner_item_compact,
@@ -957,15 +784,7 @@ public final class MainActivity extends AppCompatActivity {
         document = DocumentStore.load(this, selected);
         document.dpi = selectedProfile.dpi;
         document.normalize();
-        undoStack.clear();
-        redoStack.clear();
-        try {
-            lastSnapshot = document.toJson().toString();
-        } catch (org.json.JSONException ignored) {
-            lastSnapshot = null;
-        }
-        lastSnapshotAt = 0L;
-        refreshUndoState();
+        elementEditorController.resetHistory();
         labelCanvas.setDocument(document);
         TextElement first = document.elements.isEmpty() ? null : document.elements.get(0);
         labelCanvas.select(first == null ? null : first.id);
@@ -974,1210 +793,17 @@ public final class MainActivity extends AppCompatActivity {
         renderWorkMode();
         persistAndRedraw();
         ScanInputMode pageScanMode = ScanModeStore.load(this, selected);
-        if (scanModeSwitch != null) scanModeSwitch.setMode(pageScanMode);
-        changeScanMode(pageScanMode);
-        if (selected == WorkMode.COMPONENT_ORGANIZATION && !lastScannedContent.isEmpty()) {
-            applyComponentScan(lastScannedContent, false);
-        }
+        scannerController.onWorkModeSwitched(selected, pageScanMode);
         toast("已切换到“" + selected.label + "”模式");
     }
 
     private void renderWorkMode() {
         boolean component = workMode == WorkMode.COMPONENT_ORGANIZATION;
-        if (componentPanel != null) componentPanel.setVisibility(View.VISIBLE);
         if (supplierSpinner != null) supplierSpinner.setVisibility(component ? View.VISIBLE : View.GONE);
         if (scanModeSwitch != null) scanModeSwitch.setLabelModeVisible(component);
         if (addTextButton != null) addTextButton.setVisibility(component ? View.GONE : View.VISIBLE);
-        if (normalReservedPanel != null) {
-            normalReservedPanel.setVisibility(component ? View.GONE : View.VISIBLE);
-        }
-        if (componentReservedPanel != null) {
-            componentReservedPanel.setVisibility(component ? View.VISIBLE : View.GONE);
-        }
-        if (component) renderTemplatePanel();
-        if (modeContextTitle != null) modeContextTitle.setText(component
-                ? "器件整理 · 标签工作台" : "普通标签工作台");
-        TextElement selected = labelCanvas == null ? null : labelCanvas.getSelectedElement();
-        if (textEditorCard != null) {
-            textEditorCard.setVisibility(!component && selected != null ? View.VISIBLE : View.GONE);
-        }
-        if (componentRecordSummary != null && recognitionLog.length() == 0) {
-            componentRecordSummary.setText("等待识别任务…");
-        }
-    }
-
-    private void configureActions() {
-        findViewById(R.id.scanButton).setOnClickListener(view -> requestScan());
-        if (addTextButton != null) {
-            addTextButton.setOnClickListener(view -> showElementEditorDialog());
-        }
-        if (customLabelSizeButton != null) {
-            customLabelSizeButton.setOnClickListener(view -> showCustomLabelSizeDialog());
-        }
-        findViewById(R.id.deleteTextButton).setOnClickListener(view -> deleteSelected());
-        View applySize = findViewById(R.id.applySizeButton);
-        if (applySize != null) applySize.setOnClickListener(view -> applyCanvasSize());
-        View presetSmall = findViewById(R.id.presetSmallButton);
-        if (presetSmall != null) presetSmall.setOnClickListener(view -> applyPreset(20f, 10f));
-        View presetMedium = findViewById(R.id.presetMediumButton);
-        if (presetMedium != null) presetMedium.setOnClickListener(view -> applyPreset(25f, 15f));
-        View presetLarge = findViewById(R.id.presetLargeButton);
-        if (presetLarge != null) presetLarge.setOnClickListener(view -> applyPreset(40f, 30f));
-        findViewById(R.id.previewButton).setOnClickListener(view -> showPreview());
-        printButton.setOnClickListener(view -> requestBluetoothAction(ACTION_PRINT));
-        findViewById(R.id.connectButton).setOnClickListener(view -> requestBluetoothAction(ACTION_CHOOSE_PRINTER));
-        findViewById(R.id.diagnosticsButton).setOnClickListener(view -> showDiagnostics());
-        findViewById(R.id.profileSettingsButton).setOnClickListener(view -> showProfileSettings());
-        View modelConfig = findViewById(R.id.modelConfigButton);
-        if (modelConfig != null) modelConfig.setOnClickListener(view -> showModelConfigDialog());
-        findViewById(R.id.disconnectButton).setOnClickListener(view -> {
-            if (printerService != null) printerService.disconnect();
-        });
-        findViewById(R.id.cancelJobButton).setOnClickListener(view -> {
-            if (printerService == null || !printerService.cancelActiveOrLastQueuedJob()) {
-                toast("当前没有可取消的任务");
-            } else {
-                toast("任务已取消；活动传输会重置通道");
-            }
-        });
-        findViewById(R.id.retryJobButton).setOnClickListener(view -> {
-            if (printerService == null || !printerService.retryLastFailedJob()) toast("没有可重试的失败任务");
-            else toast("失败任务已重新入队");
-        });
-        View fontDecrease = findViewById(R.id.fontDecreaseButton);
-        if (fontDecrease != null) fontDecrease.setOnClickListener(view -> stepFontSize(-1f));
-        View fontIncrease = findViewById(R.id.fontIncreaseButton);
-        if (fontIncrease != null) fontIncrease.setOnClickListener(view -> stepFontSize(1f));
-        bindNudge(R.id.nudgeLeftButton, -NUDGE_STEP_MM, 0f);
-        bindNudge(R.id.nudgeRightButton, NUDGE_STEP_MM, 0f);
-        bindNudge(R.id.nudgeUpButton, 0f, -NUDGE_STEP_MM);
-        bindNudge(R.id.nudgeDownButton, 0f, NUDGE_STEP_MM);
-        View centerHorizontal = findViewById(R.id.centerHorizontalButton);
-        if (centerHorizontal != null) {
-            centerHorizontal.setOnClickListener(view -> centerSelectedHorizontally());
-        }
-        View centerVertical = findViewById(R.id.centerVerticalButton);
-        if (centerVertical != null) {
-            centerVertical.setOnClickListener(view -> centerSelectedVertically());
-        }
-        View duplicate = findViewById(R.id.duplicateTextButton);
-        if (duplicate != null) duplicate.setOnClickListener(view -> duplicateSelected());
-    }
-
-    /** 把现有完整属性面板移入近全屏对话框，并增加通用坐标/尺寸编辑。 */
-    private void showElementEditorDialog() {
-        TextElement selected = labelCanvas.getSelectedElement();
-        if (selected == null) {
-            toast("请先选择要编辑的画布元素");
-            return;
-        }
-        if (elementEditorDialog != null && elementEditorDialog.isShowing()) return;
-        if (!(textEditorCard.getParent() instanceof ViewGroup)) return;
-
-        showSelectedElement(selected);
-        ViewGroup originalParent = (ViewGroup) textEditorCard.getParent();
-        int originalIndex = originalParent.indexOfChild(textEditorCard);
-        ViewGroup.LayoutParams originalParams = textEditorCard.getLayoutParams();
-
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(16), dp(12), dp(16), dp(12));
-        root.setBackgroundColor(0xFFF9F7F0);
-
-        LinearLayout header = new LinearLayout(this);
-        header.setGravity(android.view.Gravity.CENTER_VERTICAL);
-        TextView title = new TextView(this);
-        title.setText("编辑元素 · " + titleFor(selected));
-        title.setTextColor(ContextCompat.getColor(this, R.color.eprint_text));
-        title.setTextSize(20);
-        title.setTypeface(title.getTypeface(), android.graphics.Typeface.BOLD);
-        header.addView(title, new LinearLayout.LayoutParams(0,
-                LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-        Button done = new Button(this);
-        done.setText("完成");
-        done.setAllCaps(false);
-        done.setBackgroundResource(R.drawable.button_primary);
-        done.setTextColor(ContextCompat.getColor(this, R.color.eprint_paper));
-        header.addView(done, new LinearLayout.LayoutParams(dp(100), dp(44)));
-        root.addView(header, new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-
-        TextView geometryHint = new TextView(this);
-        geometryHint.setText(elementXInput == null
-                ? "位置与尺寸（mm）· 可输入负坐标，元素可超出标签边界"
-                : "所有属性即时生效；X/Y/宽/高使用 mm，可输入负坐标并允许越界");
-        geometryHint.setTextColor(ContextCompat.getColor(this, R.color.eprint_muted));
-        geometryHint.setTextSize(13);
-        LinearLayout.LayoutParams hintParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        hintParams.topMargin = dp(6);
-        root.addView(geometryHint, hintParams);
-
-        if (elementXInput == null) {
-            LinearLayout geometryRow = new LinearLayout(this);
-            geometryRow.setGravity(android.view.Gravity.BOTTOM);
-            EditText xInput = geometryInput(selected.xMm);
-            EditText yInput = geometryInput(selected.yMm);
-            EditText widthInput = geometryInput(selected.widthMm);
-            EditText heightInput = geometryInput(selected.heightMm);
-            geometryRow.addView(geometryField("X", xInput), weightedGeometryParams());
-            geometryRow.addView(geometryField("Y", yInput), weightedGeometryParams());
-            geometryRow.addView(geometryField("宽", widthInput), weightedGeometryParams());
-            geometryRow.addView(geometryField("高", heightInput), weightedGeometryParams());
-            Button applyGeometry = new Button(this);
-            applyGeometry.setText("应用位置/尺寸");
-            applyGeometry.setAllCaps(false);
-            applyGeometry.setBackgroundResource(R.drawable.button_secondary);
-            LinearLayout.LayoutParams applyParams = new LinearLayout.LayoutParams(dp(150), dp(48));
-            applyParams.setMarginStart(dp(8));
-            geometryRow.addView(applyGeometry, applyParams);
-            applyGeometry.setOnClickListener(view -> applyEditorGeometry(
-                    xInput, yInput, widthInput, heightInput));
-            root.addView(geometryRow, new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT));
-        }
-
-        FrameLayout editorHost = new FrameLayout(this);
-        LinearLayout.LayoutParams hostParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f);
-        hostParams.topMargin = dp(8);
-        root.addView(editorHost, hostParams);
-        originalParent.removeView(textEditorCard);
-        editorHost.addView(textEditorCard, new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
-        textEditorCard.setVisibility(View.VISIBLE);
-
-        Dialog dialog = new Dialog(this);
-        elementEditorDialog = dialog;
-        dialog.setContentView(root);
-        done.setOnClickListener(view -> dialog.dismiss());
-        dialog.setOnDismissListener(ignored -> {
-            if (textEditorCard.getParent() instanceof ViewGroup) {
-                ((ViewGroup) textEditorCard.getParent()).removeView(textEditorCard);
-            }
-            int targetIndex = Math.min(originalIndex, originalParent.getChildCount());
-            originalParent.addView(textEditorCard, targetIndex, originalParams);
-            elementEditorDialog = null;
-            showSelectedElement(labelCanvas.getSelectedElement());
-        });
-        dialog.show();
-        Window window = dialog.getWindow();
-        if (window != null) {
-            window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
-            android.util.DisplayMetrics metrics = getResources().getDisplayMetrics();
-            window.setLayout(Math.round(metrics.widthPixels * 0.94f),
-                    Math.round(metrics.heightPixels * 0.92f));
-        }
-    }
-
-    private EditText geometryInput(float value) {
-        EditText input = new EditText(this);
-        input.setText(formatNumber(value));
-        input.setSelectAllOnFocus(true);
-        input.setSingleLine(true);
-        input.setGravity(android.view.Gravity.CENTER);
-        input.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL
-                | InputType.TYPE_NUMBER_FLAG_SIGNED);
-        return input;
-    }
-
-    private LinearLayout geometryField(String label, EditText input) {
-        LinearLayout field = new LinearLayout(this);
-        field.setOrientation(LinearLayout.VERTICAL);
-        TextView caption = new TextView(this);
-        caption.setText(label + " mm");
-        caption.setTextColor(ContextCompat.getColor(this, R.color.eprint_muted));
-        caption.setGravity(android.view.Gravity.CENTER);
-        field.addView(caption, new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-        field.addView(input, new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(48)));
-        return field;
-    }
-
-    private LinearLayout.LayoutParams weightedGeometryParams() {
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0,
-                LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
-        params.setMarginEnd(dp(6));
-        return params;
-    }
-
-    private void applyEditorGeometry(EditText xInput, EditText yInput,
-                                     EditText widthInput, EditText heightInput) {
-        TextElement selected = labelCanvas.getSelectedElement();
-        Float x = parseNumber(xInput.getText().toString());
-        Float y = parseNumber(yInput.getText().toString());
-        Float width = parseNumber(widthInput.getText().toString());
-        Float height = parseNumber(heightInput.getText().toString());
-        if (selected == null || x == null || y == null || width == null || height == null
-                || width <= 0f || height <= 0f) {
-            toast("请输入有效的位置和大于 0 的宽高");
-            return;
-        }
-        selected.xMm = x;
-        selected.yMm = y;
-        selected.widthMm = width;
-        selected.heightMm = height;
-        persistAndRedraw();
-        xInput.setText(formatNumber(selected.xMm));
-        yInput.setText(formatNumber(selected.yMm));
-        widthInput.setText(formatNumber(selected.widthMm));
-        heightInput.setText(formatNumber(selected.heightMm));
-        toast("位置与尺寸已应用");
-    }
-
-    private void bindNudge(int buttonId, float dxMm, float dyMm) {
-        View button = findViewById(buttonId);
-        if (button != null) button.setOnClickListener(view -> nudgeSelected(dxMm, dyMm));
-    }
-
-    private void nudgeSelected(float dxMm, float dyMm) {
-        TextElement selected = labelCanvas.getSelectedElement();
-        if (selected == null) return;
-        if (selected.locked) {
-            toast("元素已锁定，先解锁再调整");
-            return;
-        }
-        selected.xMm += dxMm;
-        selected.yMm += dyMm;
-        persistAndRedraw();
-    }
-
-    private void centerSelectedHorizontally() {
-        TextElement selected = labelCanvas.getSelectedElement();
-        if (selected == null) return;
-        if (selected.locked) {
-            toast("元素已锁定，先解锁再调整");
-            return;
-        }
-        selected.xMm = (document.widthMm - selected.widthMm) / 2f;
-        persistAndRedraw();
-    }
-
-    private void centerSelectedVertically() {
-        TextElement selected = labelCanvas.getSelectedElement();
-        if (selected == null) return;
-        if (selected.locked) {
-            toast("元素已锁定，先解锁再调整");
-            return;
-        }
-        selected.yMm = (document.heightMm - selected.heightMm) / 2f;
-        persistAndRedraw();
-    }
-
-    private void stepFontSize(float deltaPt) {
-        TextElement selected = labelCanvas.getSelectedElement();
-        if (selected == null || !selected.isTextual()) return;
-        selected.fontSizePt = LabelDocument.clamp(selected.fontSizePt + deltaPt, 6f, 72f);
-        populatingEditor = true;
-        fontSizeInput.setText(formatNumber(selected.fontSizePt));
-        populatingEditor = false;
-        persistAndRedraw();
-    }
-
-    private void duplicateSelected() {
-        TextElement selected = labelCanvas.getSelectedElement();
-        if (selected == null) {
-            toast("请先选择要复制的元素");
-            return;
-        }
-        TextElement copy = selected.copyWithNewId();
-        copy.yMm = selected.yMm + 3f;
-        document.elements.add(copy);
-        document.normalize();
-        labelCanvas.select(copy.id);
-        showSelectedElement(copy);
-        persistAndRedraw();
-    }
-
-    private void configureReservedPanels() {
-        normalReservedPanel = findViewById(R.id.normalReservedPanel);
-        componentReservedPanel = findViewById(R.id.componentReservedPanel);
-        elementChipsRow = findViewById(R.id.elementChipsRow);
-        elementChipsScroll = findViewById(R.id.elementChipsScroll);
-        templateDescription = findViewById(R.id.templateDescription);
-        templateBoldCheck = findViewById(R.id.templateBoldCheck);
-        templateBrandCheck = findViewById(R.id.templateBrandCheck);
-        templateLargeFontCheck = findViewById(R.id.templateLargeFontCheck);
-        templateModelCheck = findViewById(R.id.templateModelCheck);
-        templateCategoryCheck = findViewById(R.id.templateCategoryCheck);
-        templateSpecCheck = findViewById(R.id.templateSpecCheck);
-        templatePackageCheck = findViewById(R.id.templatePackageCheck);
-        templateParametersCheck = findViewById(R.id.templateParametersCheck);
-        templateSupplierCheck = findViewById(R.id.templateSupplierCheck);
-        bindInsert(R.id.insertTextButton, TextElement.TYPE_TEXT);
-        bindInsert(R.id.insertBarcodeButton, TextElement.TYPE_BARCODE);
-        bindInsert(R.id.insertQrButton, TextElement.TYPE_QRCODE);
-        bindInsert(R.id.insertLineButton, TextElement.TYPE_LINE);
-        bindInsert(R.id.insertRectButton, TextElement.TYPE_RECT);
-        bindInsert(R.id.insertTimeButton, TextElement.TYPE_TIME);
-        bindInsert(R.id.insertSerialButton, TextElement.TYPE_SERIAL);
-        bindInsert(R.id.insertArcTextButton, TextElement.TYPE_ARCTEXT);
-        bindInsert(R.id.insertIconButton, TextElement.TYPE_ICON);
-        bindInsert(R.id.insertTableButton, TextElement.TYPE_TABLE);
-        View insertImage = findViewById(R.id.insertImageButton);
-        if (insertImage != null) insertImage.setOnClickListener(view -> insertImageElement());
-        View insertSignature = findViewById(R.id.insertSignatureButton);
-        if (insertSignature != null) insertSignature.setOnClickListener(view -> showSignatureDialog());
-        View replaceImage = findViewById(R.id.replaceImageButton);
-        if (replaceImage != null) replaceImage.setOnClickListener(view -> launchImagePicker());
-        if (borderStyleButton != null) {
-            borderStyleButton.setOnClickListener(view -> showBorderStyleDialog());
-        }
-        if (undoButton != null) undoButton.setOnClickListener(view -> undo());
-        if (redoButton != null) redoButton.setOnClickListener(view -> redo());
-        View clear = findViewById(R.id.clearCanvasButton);
-        if (clear != null) clear.setOnClickListener(view -> clearCanvasElements());
-        templateSelectorRow = findViewById(R.id.templateSelectorRow);
-        if (templateBoldCheck != null) {
-            templateBoldCheck.setOnCheckedChangeListener((button, checked) -> {
-                if (populatingTemplate) return;
-                templateBoldHeadline = checked;
-                saveTemplateOptions();
-                renderTemplatePanel();
-                regenerateComponentDocument();
-            });
-        }
-        bindTemplateFieldChecks();
-        if (templateLargeFontCheck != null) {
-            templateLargeFontCheck.setOnCheckedChangeListener((button, checked) -> {
-                if (populatingTemplate) return;
-                templateLargeFont = checked;
-                saveTemplateOptions();
-                renderTemplatePanel();
-                regenerateComponentDocument();
-            });
-        }
-    }
-
-    private void bindInsert(int buttonId, String type) {
-        View button = findViewById(buttonId);
-        if (button != null) button.setOnClickListener(view -> insertElement(type));
-    }
-
-    private void bindTemplateFieldChecks() {
-        CheckBox[] checks = {templateModelCheck, templateCategoryCheck, templateSpecCheck,
-                templatePackageCheck, templateBrandCheck, templateParametersCheck,
-                templateSupplierCheck};
-        for (CheckBox check : checks) {
-            if (check == null) continue;
-            check.setOnCheckedChangeListener((button, checked) -> {
-                if (populatingTemplate) return;
-                templateFields = new ComponentFieldSelection(
-                        templateModelCheck.isChecked(), templateCategoryCheck.isChecked(),
-                        templateSpecCheck.isChecked(), templatePackageCheck.isChecked(),
-                        templateBrandCheck.isChecked(), templateParametersCheck.isChecked(),
-                        templateSupplierCheck.isChecked());
-                templateShowBrand = templateFields.brand;
-                saveTemplateOptions();
-                renderTemplatePanel();
-                regenerateComponentDocument();
-            });
-        }
-    }
-
-    private void insertElement(String type) {
-        TextElement element = document.addElement(type);
-        labelCanvas.select(element.id);
-        showSelectedElement(element);
-        persistAndRedraw();
-    }
-
-    private void insertImageElement() {
-        insertElement(TextElement.TYPE_IMAGE);
-        launchImagePicker();
-    }
-
-    private void launchImagePicker() {
-        TextElement selected = labelCanvas.getSelectedElement();
-        if (selected == null || !TextElement.TYPE_IMAGE.equals(selected.type)) {
-            toast("请先选中一个图片元素");
-            return;
-        }
-        imagePickerLauncher.launch(new PickVisualMediaRequest.Builder()
-                .setMediaType(ActivityResultContracts.PickVisualMedia.ImageOnly.INSTANCE)
-                .build());
-    }
-
-    private void importImageToSelected(android.net.Uri uri) {
-        TextElement selected = labelCanvas.getSelectedElement();
-        if (selected == null || !TextElement.TYPE_IMAGE.equals(selected.type)) return;
-        String path = copyImageToInternal(uri);
-        if (path == null) {
-            toast("图片读取失败");
-            return;
-        }
-        selected.text = path;
-        // 按图片宽高比修正盒高，避免拉伸
-        android.graphics.BitmapFactory.Options bounds = new android.graphics.BitmapFactory.Options();
-        bounds.inJustDecodeBounds = true;
-        android.graphics.BitmapFactory.decodeFile(path, bounds);
-        if (bounds.outWidth > 0 && bounds.outHeight > 0) {
-            selected.heightMm = LabelDocument.clamp(
-                    selected.widthMm * bounds.outHeight / (float) bounds.outWidth,
-                    3f, LabelDocument.MAX_ELEMENT_SIZE_MM);
-        }
-        ImageElementRenderer.invalidate(path);
-        persistAndRedraw();
-        toast("图片已加入画布");
-    }
-
-    @Nullable
-    private String copyImageToInternal(android.net.Uri uri) {
-        try {
-            android.graphics.BitmapFactory.Options bounds = new android.graphics.BitmapFactory.Options();
-            bounds.inJustDecodeBounds = true;
-            try (InputStream in = getContentResolver().openInputStream(uri)) {
-                android.graphics.BitmapFactory.decodeStream(in, null, bounds);
-            }
-            if (bounds.outWidth <= 0) return null;
-            int sample = 1;
-            while (bounds.outWidth / sample > 800 || bounds.outHeight / sample > 800) sample *= 2;
-            android.graphics.BitmapFactory.Options options = new android.graphics.BitmapFactory.Options();
-            options.inSampleSize = sample;
-            android.graphics.Bitmap bitmap;
-            try (InputStream in = getContentResolver().openInputStream(uri)) {
-                bitmap = android.graphics.BitmapFactory.decodeStream(in, null, options);
-            }
-            if (bitmap == null) return null;
-            File directory = new File(getFilesDir(), "images");
-            if (!directory.exists() && !directory.mkdirs()) return null;
-            File file = new File(directory, "img_" + System.currentTimeMillis() + ".jpg");
-            try (OutputStream out = new FileOutputStream(file)) {
-                bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 85, out);
-            }
-            bitmap.recycle();
-            return file.getAbsolutePath();
-        } catch (IOException | OutOfMemoryError error) {
-            return null;
-        }
-    }
-
-    private void showSignatureDialog() {
-        SignatureView board = new SignatureView(this);
-        AlertDialog dialog = new AlertDialog.Builder(this)
-                .setTitle("手写签名（保存后生成图片元素）")
-                .setView(board)
-                .setNeutralButton("清除", null)
-                .setNegativeButton("取消", null)
-                .setPositiveButton("保存", null)
-                .create();
-        dialog.setOnShowListener(ignored -> {
-            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(view -> board.clear());
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(view -> {
-                Bitmap bitmap = board.createBitmap();
-                if (bitmap == null) {
-                    toast("签名为空");
-                    return;
-                }
-                Button saveButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
-                saveButton.setEnabled(false);
-                File directory = new File(getFilesDir(), "images");
-                String fileName = "sign_" + System.currentTimeMillis() + ".png";
-                new Thread(() -> {
-                    String path = SignatureView.saveBitmap(bitmap, directory, fileName);
-                    runOnUiThread(() -> {
-                        if (path == null) {
-                            saveButton.setEnabled(true);
-                            toast("签名保存失败");
-                            return;
-                        }
-                        TextElement element = document.addElement(TextElement.TYPE_IMAGE);
-                        element.text = path;
-                        element.heightMm = LabelDocument.clamp(element.widthMm / 2f,
-                                3f, LabelDocument.MAX_ELEMENT_SIZE_MM);
-                        labelCanvas.select(element.id);
-                        showSelectedElement(element);
-                        persistAndRedraw();
-                        dialog.dismiss();
-                    });
-                }, "eprint-signature-save").start();
-            });
-        });
-        dialog.show();
-    }
-
-    private void showBorderStyleDialog() {
-        String[] styles = {"无边框", "单线边框", "双线边框"};
-        new AlertDialog.Builder(this)
-                .setTitle("标签边框")
-                .setSingleChoiceItems(styles, document.borderStyle, (dialog, which) -> {
-                    document.borderStyle = which;
-                    persistAndRedraw();
-                    dialog.dismiss();
-                })
-                .setNegativeButton("取消", null)
-                .show();
-    }
-
-    private void refreshBorderStyleButton() {
-        if (borderStyleButton == null) return;
-        borderStyleButton.setText(document.borderStyle == 0 ? "边框:无"
-                : document.borderStyle == 1 ? "边框:单" : "边框:双");
-    }
-
-    private void trackSnapshot() {
-        if (restoringSnapshot) return;
-        String json;
-        try {
-            json = document.toJson().toString();
-        } catch (org.json.JSONException error) {
-            return;
-        }
-        long now = android.os.SystemClock.uptimeMillis();
-        // 与上一快照间隔小于 800ms 的连续修改合并为一步；栈上限 50
-        if (lastSnapshot == null) {
-            lastSnapshot = json;
-            lastSnapshotAt = 0L;
-        } else if (!lastSnapshot.equals(json)) {
-            if (lastSnapshotAt == 0L || now - lastSnapshotAt > 800) {
-                if (undoStack.size() >= 50) undoStack.removeLast();
-                undoStack.push(lastSnapshot);
-            }
-            // 任意新修改都会分叉历史，连续修改仍在 800ms 窗口内合并。
-            redoStack.clear();
-            lastSnapshot = json;
-            lastSnapshotAt = now;
-        }
-        refreshUndoState();
-    }
-
-    private void undo() {
-        if (undoStack.isEmpty()) {
-            toast("没有可撤销的操作");
-            return;
-        }
-        restoringSnapshot = true;
-        redoStack.push(lastSnapshot);
-        lastSnapshot = undoStack.pop();
-        restoreSnapshot(lastSnapshot);
-        lastSnapshotAt = 0L;
-        restoringSnapshot = false;
-        refreshUndoState();
-    }
-
-    private void redo() {
-        if (redoStack.isEmpty()) {
-            toast("没有可重做的操作");
-            return;
-        }
-        restoringSnapshot = true;
-        undoStack.push(lastSnapshot);
-        lastSnapshot = redoStack.pop();
-        restoreSnapshot(lastSnapshot);
-        lastSnapshotAt = 0L;
-        restoringSnapshot = false;
-        refreshUndoState();
-    }
-
-    private void restoreSnapshot(String json) {
-        document = LabelDocument.fromJson(json);
-        document.dpi = selectedProfile.dpi;
-        document.normalize();
-        DocumentStore.save(this, workMode, document);
-        labelCanvas.setDocument(document);
-        TextElement first = document.elements.isEmpty() ? null : document.elements.get(0);
-        labelCanvas.select(first == null ? null : first.id);
-        showSelectedElement(first);
-        refreshDocumentControls();
-        labelCanvas.invalidate();
-        updateCompatibilityWarning();
-        refreshElementChips();
-    }
-
-    private void refreshUndoState() {
-        if (undoButton != null) undoButton.setAlpha(undoStack.isEmpty() ? 0.4f : 1f);
-        if (redoButton != null) redoButton.setAlpha(redoStack.isEmpty() ? 0.4f : 1f);
-    }
-
-    private void selectTemplate(ComponentTemplate template) {
-        if (componentTemplate == template) return;
-        componentTemplate = template;
-        saveTemplateOptions();
-        renderTemplatePanel();
-        regenerateComponentDocument();
-    }
-
-    private void saveTemplateOptions() {
-        ComponentTemplateStore.save(this, componentTemplate, templateBoldHeadline,
-                templateLargeFont, templateFields);
-    }
-
-    private void renderTemplatePanel() {
-        if (templateDescription == null) return;
-        populatingTemplate = true;
-        templateDescription.setText(componentTemplate.label + " · " + componentTemplate.description);
-        if (templateBoldCheck != null) templateBoldCheck.setChecked(templateBoldHeadline);
-        if (templateBrandCheck != null) templateBrandCheck.setChecked(templateShowBrand);
-        if (templateLargeFontCheck != null) templateLargeFontCheck.setChecked(templateLargeFont);
-        if (templateModelCheck != null) templateModelCheck.setChecked(templateFields.model);
-        if (templateCategoryCheck != null) templateCategoryCheck.setChecked(templateFields.category);
-        if (templateSpecCheck != null) templateSpecCheck.setChecked(templateFields.specification);
-        if (templatePackageCheck != null) templatePackageCheck.setChecked(templateFields.packageName);
-        if (templateParametersCheck != null) templateParametersCheck.setChecked(templateFields.parameters);
-        if (templateSupplierCheck != null) templateSupplierCheck.setChecked(templateFields.supplierPartNumber);
-        populatingTemplate = false;
-        rebuildTemplateSelector();
-    }
-
-    private void rebuildTemplateSelector() {
-        if (templateSelectorRow == null) return;
-        templateSelectorRow.removeAllViews();
-        ComponentRecord preview = componentRecord != null ? componentRecord : sampleComponentRecord();
-        for (ComponentTemplate template : ComponentTemplate.values()) {
-            templateSelectorRow.addView(buildTemplateTile(template, preview));
-        }
-    }
-
-    /** 用真实扫描数据（未扫码时用立创样本）把每个模板渲染成可点选的缩略图。 */
-    private View buildTemplateTile(ComponentTemplate template, ComponentRecord record) {
-        boolean selected = componentTemplate == template;
-        LinearLayout tile = new LinearLayout(this);
-        tile.setOrientation(LinearLayout.VERTICAL);
-        tile.setGravity(android.view.Gravity.CENTER_HORIZONTAL);
-        GradientDrawable border = new GradientDrawable();
-        border.setColor(0xFFFFFFFF);
-        border.setCornerRadius(dp(6));
-        border.setStroke(dp(selected ? 2 : 1), ContextCompat.getColor(this,
-                selected ? R.color.eprint_coral : R.color.eprint_line));
-        tile.setBackground(border);
-        tile.setPadding(dp(4), dp(4), dp(4), dp(2));
-
-        LabelDocument previewDocument = ComponentLabelFactory.create(record, 203, 25f, 15f,
-                template, templateBoldHeadline, templateLargeFont, templateFields);
-        ImageView image = new ImageView(this);
-        image.setImageBitmap(LabelBitmapRenderer.render(previewDocument));
-        tile.addView(image, new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
-
-        TextView caption = new TextView(this);
-        caption.setText(template.label);
-        caption.setTextSize(10f);
-        caption.setGravity(android.view.Gravity.CENTER);
-        caption.setTextColor(ContextCompat.getColor(this,
-                selected ? R.color.eprint_coral_dark : R.color.eprint_muted));
-        tile.addView(caption, new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT));
-
-        tile.setContentDescription("模板" + template.label + (selected ? "，已选择" : ""));
-        tile.setOnClickListener(view -> selectTemplate(template));
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0,
-                LinearLayout.LayoutParams.MATCH_PARENT, 1f);
-        params.setMarginEnd(dp(6));
-        tile.setLayoutParams(params);
-        return tile;
-    }
-
-    private static ComponentRecord sampleComponentRecord() {
-        List<OcrLine> sample = new ArrayList<>();
-        sample.add(new OcrLine("C45359894", 1f, 0, 0, 0, 0));
-        sample.add(new OcrLine("贴片电容(MLCC)", 1f, 0, 0, 0, 0));
-        sample.add(new OcrLine("12pF ±5% 50V", 1f, 0, 0, 0, 0));
-        sample.add(new OcrLine("0402", 1f, 0, 0, 0, 0));
-        sample.add(new OcrLine("CGA0402C0G120J500GT", 1f, 0, 0, 0, 0));
-        sample.add(new OcrLine("HRE(芯声)", 1f, 0, 0, 0, 0));
-        return LabelTextParser.parse(sample);
-    }
-
-    private void regenerateComponentDocument() {
-        if (workMode != WorkMode.COMPONENT_ORGANIZATION || componentRecord == null) return;
-        document = ComponentLabelFactory.create(componentRecord, selectedProfile.dpi,
-                document.widthMm, document.heightMm, componentTemplate,
-                templateBoldHeadline, templateLargeFont, templateFields);
-        labelCanvas.setDocument(document);
-        TextElement first = document.elements.isEmpty() ? null : document.elements.get(0);
-        labelCanvas.select(first == null ? null : first.id);
-        showSelectedElement(first);
-        refreshDocumentControls();
-        persistAndRedraw();
-    }
-
-    private void clearCanvasElements() {
-        if (document.elements.isEmpty()) {
-            toast("画布上没有元素");
-            return;
-        }
-        document.elements.clear();
-        labelCanvas.select(null);
-        showSelectedElement(null);
-        persistAndRedraw();
-        toast("已清空画布元素");
-    }
-
-    private static String chipLabel(TextElement element) {
-        switch (element.type) {
-            case TextElement.TYPE_LINE:
-                return "v".equals(element.format) ? "竖线" : "横线";
-            case TextElement.TYPE_RECT:
-                return element.filled ? "矩形·填充" : "矩形";
-            case TextElement.TYPE_TIME:
-                return "时间";
-            case TextElement.TYPE_SERIAL:
-                return "序列:" + element.serialText();
-            case TextElement.TYPE_ARCTEXT:
-                String arc = element.text == null ? "" : element.text.trim();
-                return compactElementLabel("弧形", arc, 10);
-            case TextElement.TYPE_IMAGE:
-                return "图片";
-            case TextElement.TYPE_ICON:
-                return "图标:" + IconCatalog.LABELS[IconCatalog.indexOf(element.format)];
-            case TextElement.TYPE_TABLE:
-                return "表格" + element.tableRows + "×" + element.tableCols;
-            case TextElement.TYPE_BARCODE:
-                String content = element.text == null ? "" : element.text.trim();
-                return "一维码 · " + BarcodeRasterizer.BARCODE_FORMAT_LABELS[
-                        barcodeFormatIndex(element.format)] + " · " + content.length() + "字";
-            case TextElement.TYPE_QRCODE:
-                String qrContent = element.text == null ? "" : element.text.trim();
-                return "二维码 · " + BarcodeRasterizer.TWO_DIMENSIONAL_FORMAT_LABELS[
-                        twoDimensionalFormatIndex(element.format)] + " · " + qrContent.length() + "字";
-            case TextElement.TYPE_TEXT:
-            default:
-                String label = element.text == null ? "" : element.text.trim();
-                if (label.isEmpty()) label = "（空文本）";
-                return (element.locked ? "🔒" : "")
-                        + compactElementLabel("文本", label, 12);
-        }
-    }
-
-    private static String compactElementLabel(String type, String content, int visibleLimit) {
-        if (content == null || content.isEmpty()) return type + " · 空";
-        return content.length() <= visibleLimit ? type + " · " + content
-                : type + " · " + content.length() + "字";
-    }
-
-    private void refreshElementChips() {
-        if (elementChipsRow == null) return;
-        elementChipsRow.removeAllViews();
-        TextElement selected = labelCanvas == null ? null : labelCanvas.getSelectedElement();
-        Button activeChip = null;
-        for (TextElement element : document.elements) {
-            String label = chipLabel(element);
-            Button chip = new Button(this);
-            chip.setText(label);
-            chip.setAllCaps(false);
-            chip.setTextSize(11);
-            chip.setSingleLine(true);
-            chip.setIncludeFontPadding(true);
-            chip.setGravity(android.view.Gravity.CENTER);
-            chip.setPadding(dp(10), 0, dp(10), 0);
-            chip.setMinHeight(0);
-            chip.setMinWidth(0);
-            boolean active = selected != null && element.id.equals(selected.id);
-            if (active) activeChip = chip;
-            chip.setBackgroundResource(active
-                    ? R.drawable.element_chip_primary : R.drawable.element_chip_secondary);
-            chip.setTextColor(ContextCompat.getColor(this,
-                    active ? R.color.eprint_paper : R.color.eprint_text));
-            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT, dp(34));
-            params.setMarginEnd(dp(6));
-            chip.setLayoutParams(params);
-            final String elementId = element.id;
-            chip.setOnClickListener(view -> {
-                labelCanvas.select(elementId);
-                showSelectedElement(labelCanvas.getSelectedElement());
-                refreshElementChips();
-            });
-            elementChipsRow.addView(chip);
-        }
-        if (elementChipsScroll != null && activeChip != null) {
-            Button target = activeChip;
-            elementChipsScroll.post(() -> {
-                int left = Math.max(0, target.getLeft() - dp(6));
-                elementChipsScroll.smoothScrollTo(left, 0);
-            });
-        }
-    }
-
-    private void configureEditor() {
-        textInput.addTextChangedListener(new SimpleTextWatcher() {
-            @Override
-            public void afterTextChanged(Editable editable) {
-                if (populatingEditor) return;
-                TextElement selected = labelCanvas.getSelectedElement();
-                if (selected != null) {
-                    selected.text = editable.toString();
-                    persistAndRedraw();
-                }
-            }
-        });
-        fontSizeInput.addTextChangedListener(new SimpleTextWatcher() {
-            @Override
-            public void afterTextChanged(Editable editable) {
-                if (populatingEditor) return;
-                TextElement selected = labelCanvas.getSelectedElement();
-                Float value = parseNumber(editable.toString());
-                if (selected != null && value != null) {
-                    selected.fontSizePt = LabelDocument.clamp(value, 6f, 72f);
-                    persistAndRedraw();
-                }
-            }
-        });
-        boldCheck.setOnCheckedChangeListener((button, checked) -> {
-            if (populatingEditor) return;
-            TextElement selected = labelCanvas.getSelectedElement();
-            if (selected != null) {
-                selected.bold = checked;
-                persistAndRedraw();
-            }
-        });
-        alignmentSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-            @Override
-            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-                if (populatingEditor) return;
-                TextElement selected = labelCanvas.getSelectedElement();
-                if (selected != null) {
-                    selected.alignment = position;
-                    persistAndRedraw();
-                }
-            }
-
-            @Override
-            public void onNothingSelected(AdapterView<?> parent) {}
-        });
-    }
-
-    /** 类型特有属性行（码制/边长/线宽/填充/时间格式/锁定）的监听。 */
-    private void configureTypeEditors() {
-        bindElementGeometry(elementXInput, 0);
-        bindElementGeometry(elementYInput, 1);
-        bindElementGeometry(elementWidthInput, 2);
-        bindElementGeometry(elementHeightInput, 3);
-        if (barcodeFormatSpinner != null) {
-            barcodeFormatSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-                @Override
-                public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-                    if (populatingEditor) return;
-                    TextElement selected = labelCanvas.getSelectedElement();
-                    if (selected == null || !TextElement.TYPE_BARCODE.equals(selected.type)) return;
-                    selected.format = BarcodeRasterizer.BARCODE_FORMATS[position];
-                    if (!BarcodeRasterizer.isValid(selected.text, selected.format)) {
-                        toast("当前内容不符合 " + selected.format + " 码制，将显示为占位框");
-                    }
-                    persistAndRedraw();
-                }
-
-                @Override
-                public void onNothingSelected(AdapterView<?> parent) {}
-            });
-        }
-        if (barcodeTextPositionSpinner != null) {
-            barcodeTextPositionSpinner.setOnItemSelectedListener(
-                    new AdapterView.OnItemSelectedListener() {
-                @Override
-                public void onItemSelected(AdapterView<?> parent, View view,
-                                           int position, long id) {
-                    if (populatingEditor) return;
-                    TextElement selected = labelCanvas.getSelectedElement();
-                    if (selected != null && TextElement.TYPE_BARCODE.equals(selected.type)) {
-                        selected.barcodeTextPosition = new String[]{"none", "top", "bottom"}[position];
-                        selected.showLabel = position != 0;
-                        persistAndRedraw();
-                    }
-                }
-
-                @Override public void onNothingSelected(AdapterView<?> parent) {}
-            });
-        }
-        if (qrFormatSpinner != null) {
-            qrFormatSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-                @Override
-                public void onItemSelected(AdapterView<?> parent, View view,
-                                           int position, long id) {
-                    if (populatingEditor) return;
-                    TextElement selected = labelCanvas.getSelectedElement();
-                    if (selected != null && TextElement.TYPE_QRCODE.equals(selected.type)) {
-                        selected.format = BarcodeRasterizer.TWO_DIMENSIONAL_FORMATS[position];
-                        if (qrErrorCorrectionSpinner != null) {
-                            qrErrorCorrectionSpinner.setEnabled("QR_CODE".equals(selected.format));
-                        }
-                        persistAndRedraw();
-                    }
-                }
-
-                @Override public void onNothingSelected(AdapterView<?> parent) {}
-            });
-        }
-        if (qrErrorCorrectionSpinner != null) {
-            qrErrorCorrectionSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-                @Override
-                public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-                    if (populatingEditor) return;
-                    TextElement selected = labelCanvas.getSelectedElement();
-                    if (selected != null && TextElement.TYPE_QRCODE.equals(selected.type)) {
-                        selected.qrErrorCorrection = new String[]{"L", "M", "Q", "H"}[position];
-                        persistAndRedraw();
-                    }
-                }
-
-                @Override
-                public void onNothingSelected(AdapterView<?> parent) {}
-            });
-        }
-        if (codeQuietZoneSpinner != null) {
-            codeQuietZoneSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-                @Override
-                public void onItemSelected(AdapterView<?> parent, View view,
-                                           int position, long id) {
-                    if (populatingEditor) return;
-                    TextElement selected = labelCanvas.getSelectedElement();
-                    if (selected != null && (TextElement.TYPE_BARCODE.equals(selected.type)
-                            || TextElement.TYPE_QRCODE.equals(selected.type))) {
-                        selected.quietZoneModules = new int[]{0, 2, 4}[position];
-                        persistAndRedraw();
-                    }
-                }
-
-                @Override public void onNothingSelected(AdapterView<?> parent) {}
-            });
-        }
-        if (codeRotationSpinner != null) {
-            codeRotationSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-                @Override
-                public void onItemSelected(AdapterView<?> parent, View view,
-                                           int position, long id) {
-                    if (populatingEditor) return;
-                    TextElement selected = labelCanvas.getSelectedElement();
-                    if (selected != null && (TextElement.TYPE_BARCODE.equals(selected.type)
-                            || TextElement.TYPE_QRCODE.equals(selected.type))) {
-                        selected.rotationDegrees = position * 90;
-                        persistAndRedraw();
-                    }
-                }
-
-                @Override public void onNothingSelected(AdapterView<?> parent) {}
-            });
-        }
-        if (lineOrientationSpinner != null) {
-            lineOrientationSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-                @Override
-                public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-                    if (populatingEditor) return;
-                    TextElement selected = labelCanvas.getSelectedElement();
-                    if (selected == null || !TextElement.TYPE_LINE.equals(selected.type)) return;
-                    selected.format = position == 1 ? "v" : "h";
-                    if ("v".equals(selected.format)) {
-                        selected.heightMm = Math.max(selected.heightMm, selected.widthMm);
-                    }
-                    persistAndRedraw();
-                }
-
-                @Override
-                public void onNothingSelected(AdapterView<?> parent) {}
-            });
-        }
-        bindLineWidth(lineWidthInput, TextElement.TYPE_LINE);
-        bindLineWidth(rectWidthInput, TextElement.TYPE_RECT);
-        if (rectFilledCheck != null) {
-            rectFilledCheck.setOnCheckedChangeListener((button, checked) -> {
-                if (populatingEditor) return;
-                TextElement selected = labelCanvas.getSelectedElement();
-                if (selected != null && TextElement.TYPE_RECT.equals(selected.type)) {
-                    selected.filled = checked;
-                    persistAndRedraw();
-                }
-            });
-        }
-        if (timeFormatSpinner != null) {
-            timeFormatSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-                @Override
-                public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-                    if (populatingEditor) return;
-                    TextElement selected = labelCanvas.getSelectedElement();
-                    if (selected != null && TextElement.TYPE_TIME.equals(selected.type)) {
-                        selected.format = TimeElementFormat.values()[position].pattern;
-                        persistAndRedraw();
-                    }
-                }
-
-                @Override
-                public void onNothingSelected(AdapterView<?> parent) {}
-            });
-        }
-        if (arcDirectionSpinner != null) {
-            arcDirectionSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-                @Override
-                public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-                    if (populatingEditor) return;
-                    TextElement selected = labelCanvas.getSelectedElement();
-                    if (selected != null && TextElement.TYPE_ARCTEXT.equals(selected.type)) {
-                        selected.format = position == 1 ? "down" : "up";
-                        persistAndRedraw();
-                    }
-                }
-
-                @Override
-                public void onNothingSelected(AdapterView<?> parent) {}
-            });
-        }
-        if (lockCheck != null) {
-            lockCheck.setOnCheckedChangeListener((button, checked) -> {
-                if (populatingEditor) return;
-                TextElement selected = labelCanvas.getSelectedElement();
-                if (selected != null) {
-                    selected.locked = checked;
-                    persistAndRedraw();
-                    toast(checked ? "已锁定，画布拖拽与微调失效" : "已解锁");
-                }
-            });
-        }
-        bindSerialInt(serialValueInput, 0);
-        bindSerialInt(serialStepInput, 1);
-        bindSerialInt(serialDigitsInput, 2);
-        if (iconStyleSpinner != null) {
-            iconStyleSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-                @Override
-                public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-                    if (populatingEditor) return;
-                    TextElement selected = labelCanvas.getSelectedElement();
-                    if (selected != null && TextElement.TYPE_ICON.equals(selected.type)) {
-                        selected.format = IconCatalog.IDS[position];
-                        persistAndRedraw();
-                    }
-                }
-
-                @Override
-                public void onNothingSelected(AdapterView<?> parent) {}
-            });
-        }
-        if (imageFitSpinner != null) {
-            imageFitSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-                @Override
-                public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-                    if (populatingEditor) return;
-                    TextElement selected = labelCanvas.getSelectedElement();
-                    if (selected != null && TextElement.TYPE_IMAGE.equals(selected.type)) {
-                        selected.format = ImageElementRenderer.FIT_MODE_IDS[position];
-                        persistAndRedraw();
-                    }
-                }
-
-                @Override
-                public void onNothingSelected(AdapterView<?> parent) {}
-            });
-        }
-        bindBoxSize(imageWidthInput, true);
-        bindBoxSize(imageHeightInput, false);
-        bindLineWidth(iconLineWidthInput, TextElement.TYPE_ICON);
-        bindLineWidth(tableLineWidthInput, TextElement.TYPE_TABLE);
-        bindTableInt(tableRowsInput, true);
-        bindTableInt(tableColsInput, false);
-    }
-
-    /** 通用位置/尺寸字段：0=X、1=Y、2=宽、3=高。 */
-    private void bindElementGeometry(@Nullable EditText input, int field) {
-        if (input == null) return;
-        input.addTextChangedListener(new SimpleTextWatcher() {
-            @Override
-            public void afterTextChanged(Editable editable) {
-                if (populatingEditor) return;
-                TextElement selected = labelCanvas.getSelectedElement();
-                Float value = parseNumber(editable.toString());
-                if (selected == null || value == null) return;
-                if (field == 0) {
-                    selected.xMm = LabelDocument.clamp(value,
-                            -LabelDocument.MAX_ELEMENT_OFFSET_MM,
-                            LabelDocument.MAX_ELEMENT_OFFSET_MM);
-                } else if (field == 1) {
-                    selected.yMm = LabelDocument.clamp(value,
-                            -LabelDocument.MAX_ELEMENT_OFFSET_MM,
-                            LabelDocument.MAX_ELEMENT_OFFSET_MM);
-                } else if (field == 2) {
-                    selected.widthMm = LabelDocument.clamp(value,
-                            LabelDocument.MIN_ELEMENT_SIZE_MM,
-                            LabelDocument.MAX_ELEMENT_SIZE_MM);
-                } else {
-                    selected.heightMm = LabelDocument.clamp(value,
-                            LabelDocument.MIN_ELEMENT_SIZE_MM,
-                            LabelDocument.MAX_ELEMENT_SIZE_MM);
-                }
-                persistAndRedraw();
-            }
-        });
-    }
-
-    /** 图片盒尺寸：width 为 true 改 widthMm，false 改 heightMm。 */
-    private void bindBoxSize(@Nullable EditText input, boolean width) {
-        if (input == null) return;
-        input.addTextChangedListener(new SimpleTextWatcher() {
-            @Override
-            public void afterTextChanged(Editable editable) {
-                if (populatingEditor) return;
-                TextElement selected = labelCanvas.getSelectedElement();
-                Float value = parseNumber(editable.toString());
-                if (selected == null || !TextElement.TYPE_IMAGE.equals(selected.type)
-                        || value == null) return;
-                if (width) {
-                    selected.widthMm = LabelDocument.clamp(value, 1f,
-                            LabelDocument.MAX_ELEMENT_SIZE_MM);
-                } else {
-                    selected.heightMm = LabelDocument.clamp(value, 1f,
-                            LabelDocument.MAX_ELEMENT_SIZE_MM);
-                }
-                persistAndRedraw();
-            }
-        });
-    }
-
-    private void bindTableInt(@Nullable EditText input, boolean rows) {
-        if (input == null) return;
-        input.addTextChangedListener(new SimpleTextWatcher() {
-            @Override
-            public void afterTextChanged(Editable editable) {
-                if (populatingEditor) return;
-                TextElement selected = labelCanvas.getSelectedElement();
-                if (selected == null || !TextElement.TYPE_TABLE.equals(selected.type)) return;
-                try {
-                    int value = Integer.parseInt(editable.toString().trim());
-                    if (rows) selected.tableRows = (int) LabelDocument.clamp(value, 1, 8);
-                    else selected.tableCols = (int) LabelDocument.clamp(value, 1, 8);
-                    persistAndRedraw();
-                } catch (NumberFormatException ignored) {
-                    // 输入中途的非法片段不落状态
-                }
-            }
-        });
-    }
-
-    /** 序列号整数字段：field 0=当前值 1=步长 2=位数。 */
-    private void bindSerialInt(@Nullable EditText input, int field) {
-        if (input == null) return;
-        input.addTextChangedListener(new SimpleTextWatcher() {
-            @Override
-            public void afterTextChanged(Editable editable) {
-                if (populatingEditor) return;
-                TextElement selected = labelCanvas.getSelectedElement();
-                if (selected == null || !TextElement.TYPE_SERIAL.equals(selected.type)) return;
-                try {
-                    int value = Integer.parseInt(editable.toString().trim());
-                    if (field == 0) selected.serialCounter = Math.max(0, value);
-                    else if (field == 1) selected.serialStep = (int) LabelDocument.clamp(value, 1, 999);
-                    else selected.serialDigits = (int) LabelDocument.clamp(value, 1, 10);
-                    persistAndRedraw();
-                } catch (NumberFormatException ignored) {
-                    // 输入中途的非法片段不落状态
-                }
-            }
-        });
-    }
-
-    private void bindLineWidth(@Nullable EditText input, String expectedType) {
-        if (input == null) return;
-        input.addTextChangedListener(new SimpleTextWatcher() {
-            @Override
-            public void afterTextChanged(Editable editable) {
-                if (populatingEditor) return;
-                TextElement selected = labelCanvas.getSelectedElement();
-                Float value = parseNumber(editable.toString());
-                if (selected != null && expectedType.equals(selected.type) && value != null) {
-                    selected.lineWidthMm = LabelDocument.clamp(value, 0.1f, 3f);
-                    persistAndRedraw();
-                }
-            }
-        });
+        templateController.renderWorkModePanels(component, recognitionController.isRecognitionLogEmpty());
+        elementEditorController.updateEditorCardVisibility(component);
     }
 
     private void applyProfile(PrinterProfile profile, boolean automatic) {
@@ -2254,582 +880,6 @@ public final class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void requestScan() {
-        if (!recognitionSettings.isModeEnabled(scanInputMode)) {
-            toast(scanInputMode.label + "识别已在模型配置中关闭");
-            return;
-        }
-        if (scanInputMode == ScanInputMode.LABEL) {
-            if (barcodeScanner == null) {
-                toast("请横屏使用拍摄识别");
-                return;
-            }
-            captureAndProcessLabel();
-            return;
-        }
-        if (barcodeScanner != null) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
-                    != PackageManager.PERMISSION_GRANTED) {
-                cameraPermissionLauncher.launch(Manifest.permission.CAMERA);
-            } else if (embeddedCameraActive && singleDecodeComplete
-                    && !recognitionSettings.isContinuous(scanInputMode)) {
-                singleDecodeComplete = false;
-                startModeDecoding();
-                updateScanButtonLabel();
-            } else if (embeddedCameraActive) {
-                pauseEmbeddedScanner();
-            } else {
-                startEmbeddedScanner();
-            }
-            return;
-        }
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
-            launchScanner();
-        } else {
-            cameraPermissionLauncher.launch(Manifest.permission.CAMERA);
-        }
-    }
-
-    /** 标签档「拍摄识别」：抓帧 → 引导框 ROI → 轮廓自校正。OCR 引擎在阶段 2 接入。 */
-    private void captureAndProcessLabel() {
-        if (!recognitionSettings.labelEnabled) {
-            toast("标签识别已在模型配置中关闭");
-            return;
-        }
-        if (!recognitionSettings.ppOcrEnabled && !recognitionSettings.vlmEnabled) {
-            toast("请至少启用 PP-OCR 或 GLM-OCR");
-            return;
-        }
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
-                != PackageManager.PERMISSION_GRANTED) {
-            cameraPermissionLauncher.launch(Manifest.permission.CAMERA);
-            return;
-        }
-        if (!embeddedCameraActive) {
-            startEmbeddedScanner();
-            toast("摄像头启动中，请稍后再次点按拍摄识别");
-            return;
-        }
-        TextureView preview = findTextureView(barcodeScanner);
-        Bitmap frame = LabelFrameProcessor.capturePreviewFrame(preview);
-        if (frame == null) {
-            toast("相机预览尚未就绪，请稍后重试");
-            return;
-        }
-        prepareFinalRecognitionArea(ScanInputMode.LABEL);
-        resetRecognitionLog("开始标签识别");
-        beginProcessingPreview(frame, "1/5 · 已抓取摄像头帧");
-        appendRecognitionLog("1/5 已抓取摄像头帧");
-        RectF guide = labelGuideOverlay != null
-                ? labelGuideOverlay.normalizedGuideRect()
-                : new RectF(0.07f, 0.07f, 0.93f, 0.93f);
-        LabelFrameProcessor.ProcessedFrame processed = LabelFrameProcessor.process(
-                frame, guide, recognitionSettings.cropToLabel,
-                recognitionSettings.minimumLabelCoveragePercent / 100f,
-                recognitionSettings.blurVarianceThreshold);
-        lastLabelFrame = processed.bitmap;
-        showProcessingFrame(processed.bitmap, processed.croppedToLabel
-                ? "2/5 · 已定位并清除标签外区域" : "2/5 · 已按引导框整理画面");
-        StringBuilder summary = new StringBuilder("已抓取标签画面");
-        if (processed.region.found) {
-            summary.append("，贴纸占比约 ")
-                    .append(Math.round(processed.region.coverage * 100)).append('%');
-            if (Math.abs(processed.region.angleDegrees)
-                    >= LabelFrameProcessor.DESKEW_MIN_ANGLE_DEGREES) {
-                summary.append(processed.deskewed ? "，已旋正 " : "，检测倾角 ")
-                        .append(String.format(Locale.US, "%.1f", processed.region.angleDegrees))
-                        .append("°");
-            }
-        } else {
-            summary.append("，未检出贴纸轮廓，已保留引导框整图");
-        }
-        if (processed.croppedToLabel) summary.append("，已清除标签外区域");
-        appendRecognitionLog("2/5 " + summary);
-        if (processed.blurry) toast("画面偏糊，请拿稳后重拍");
-        runLabelOcr(processed.bitmap);
-    }
-
-    /** 后台执行已启用的 OCR；模板只在所有识别与融合结束后生成一次。 */
-    private void runLabelOcr(Bitmap frame) {
-        if (ocrRunning) {
-            toast("正在识别中，请稍候");
-            return;
-        }
-        ocrRunning = true;
-        setScanButtonBusy(true);
-        ocrExecutor.execute(() -> {
-            OcrResult result = new OcrResult(new ArrayList<>(), 0, 0, 0, 0);
-            ComponentRecord cascadeRecord = null;
-            if (recognitionSettings.ppOcrEnabled) {
-                labelOcrEngine.load(getApplicationContext());
-                if (labelOcrEngine.isReady()) {
-                    result = labelOcrEngine.recognize(frame);
-                    if (!result.lines.isEmpty()) cascadeRecord = LabelTextParser.parse(result.lines);
-                } else if (!recognitionSettings.vlmEnabled) {
-                    final String error = labelOcrEngine.initError();
-                    runOnUiThread(() -> failLabelProcessing(
-                            "PP-OCR 引擎加载失败：" + error, "OCR 引擎不可用"));
-                    return;
-                }
-            }
-            final OcrResult cascade = result;
-            final ComponentRecord ppRecord = cascadeRecord;
-            runOnUiThread(() -> showCascadeOcrPreview(frame, cascade, ppRecord));
-            if (recognitionSettings.vlmEnabled) {
-                runLabelVlm(frame, cascade, ppRecord);
-            } else {
-                runOnUiThread(() -> {
-                    if (ppRecord == null) {
-                        failLabelProcessing("PP-OCR 未识别到有效文字", "未识别到文本");
-                    } else {
-                        finalizeLabelRecognition(ppRecord,
-                                "PP-OCR 最终结果 · " + cascade.timingSummary());
-                    }
-                });
-            }
-        });
-    }
-
-    /** GLM-OCR 信息提取通道：码区遮盖 → 严格 JSON → 统一器件记录；失败不冒充成功。 */
-    private void runLabelVlm(Bitmap frame, OcrResult cascade,
-                             ComponentRecord cascadeRecord) {
-        vlmOcrEngine.load(getApplicationContext());
-        if (!vlmOcrEngine.isReady()) {
-            final String reason = vlmOcrEngine.initError();
-            runOnUiThread(() -> {
-                appendVlmNote("VLM（GLM-OCR）不可用：" + reason
-                        + "；开发阶段未自动回退到 PP-OCR 模板");
-                finishLabelProcessing();
-            });
-            return;
-        }
-        Bitmap vlmInput = frame;
-        int maskCount = 0;
-        int textProtected = 0;
-        if (recognitionSettings.maskCodesBeforeVlm) {
-            BarcodeMasker.MaskResult maskResult = BarcodeMasker.mask(frame,
-                    protectedTextRegions(cascade),
-                    recognitionSettings.experimentalWeakCodeMask);
-            vlmInput = maskResult.bitmap;
-            maskCount = maskResult.maskedCount;
-            textProtected = maskResult.protectedCount;
-        }
-        final Bitmap structuredInput = vlmInput;
-        final int maskedCount = maskCount;
-        final int protectedCount = textProtected;
-        final boolean maskingEnabled = recognitionSettings.maskCodesBeforeVlm;
-        runOnUiThread(() -> {
-            setScanButtonBusy(true);
-            Button button = findScanButton();
-            if (button != null) button.setText("VLM 信息提取中…");
-            showProcessingFrame(structuredInput, maskingEnabled
-                    ? "4/5 · GLM 输入：精确遮盖 " + maskedCount + " 处码区"
-                    : "4/5 · GLM 输入：码区遮盖未启用");
-            appendVlmNote(!maskingEnabled
-                    ? "GLM 输入按默认配置保留二维码/一维码"
-                    : maskedCount > 0
-                    ? "GLM 输入前已自动遮盖 " + maskedCount + " 个二维码/一维码区域"
-                    : "GLM 输入前未检出可遮盖的二维码/一维码区域");
-            if (protectedCount > 0) {
-                appendVlmNote("另有 " + protectedCount + " 个候选与有效文字重叠，已取消遮盖");
-            }
-            appendVlmNote("VLM（GLM-OCR 0.9B）信息提取中，通常需 5~60 秒…");
-        });
-        final StringBuilder streamed = new StringBuilder();
-        final AtomicReference<VlmResult> vlmRef = new AtomicReference<>();
-        Thread vlmThread = new Thread(() -> vlmRef.set(vlmOcrEngine.recognize(
-                structuredInput, getCacheDir(), chunk -> {
-                    streamed.append(chunk);
-                    final String partial = streamed.toString();
-                    runOnUiThread(() -> showVlmText(cascade, partial,
-                            "VLM（GLM-OCR 0.9B · MNN）信息提取中…"));
-                    return false;
-                })), "vlm-ocr");
-        vlmThread.start();
-        final long timeoutMs = vlmOcrEngine.timeoutMs();
-        try {
-            vlmThread.join(timeoutMs);
-        } catch (InterruptedException ignored) {
-            Thread.currentThread().interrupt();
-        }
-        boolean timedOut = vlmThread.isAlive();
-        if (timedOut) {
-            vlmOcrEngine.requestStop();
-            try {
-                vlmThread.join(VLM_STOP_WAIT_MS);
-            } catch (InterruptedException ignored) {
-                Thread.currentThread().interrupt();
-            }
-        }
-        final VlmResult vlm = vlmRef.get();
-        final boolean vlmTimedOut = timedOut && vlm == null;
-        ComponentRecord parsed = null;
-        String parseError = null;
-        if (vlm != null && vlm.isOk()) {
-            try {
-                parsed = GlmInformationExtractionParser.parse(vlm.text);
-            } catch (org.json.JSONException invalidJson) {
-                parseError = invalidJson.getMessage();
-            }
-        }
-        final ComponentRecord extractedRecord = parsed;
-        final String extractionError = parseError;
-        runOnUiThread(() -> {
-            if (vlmTimedOut) {
-                appendVlmNote("VLM 超时（>" + (timeoutMs / 1000)
-                        + "s），开发阶段未自动回退到 PP-OCR 模板");
-                toast("VLM 识别超时");
-                finishLabelProcessing();
-            } else if (vlm == null || !vlm.isOk()) {
-                String error = vlm != null ? vlm.error : "识别被中断";
-                appendVlmNote("VLM 识别失败：" + error
-                        + "；开发阶段未自动回退到 PP-OCR 模板");
-                toast("VLM 识别失败");
-                finishLabelProcessing();
-            } else {
-                String header = "VLM（GLM-OCR 0.9B · MNN）信息提取 JSON"
-                        + (vlmOcrEngine.loadMs() >= 0 ? " · 加载 " + vlmOcrEngine.loadMs() + "ms" : "")
-                        + (maskingEnabled ? " · 码区遮盖 " + maskedCount : " · 码区遮盖关闭")
-                        + " · " + vlm.timingSummary()
-                        + (vlm.stopped ? " · 超时截断" : "");
-                showVlmText(cascade, vlm.text, header);
-                if (extractedRecord == null) {
-                    appendVlmNote("VLM JSON 校验失败，未写入模板：" + extractionError);
-                    toast("VLM 信息提取格式不完整");
-                    finishLabelProcessing();
-                } else {
-                    ComponentRecord finalRecord = ComponentRecordFusion.merge(
-                            cascadeRecord, extractedRecord,
-                            recognitionSettings.preferGlmOnConflict);
-                    finalizeLabelRecognition(finalRecord,
-                            "GLM 信息提取优先融合 · "
-                                    + (maskingEnabled ? "码区遮盖 " + maskedCount : "码区遮盖关闭")
-                                    + " · " + vlm.timingSummary());
-                    toast("VLM 信息提取完成：" + vlm.totalMs + "ms");
-                }
-            }
-        });
-    }
-
-    /** 所有模型都结束后才更新统一记录并生成模板。 */
-    private void finalizeLabelRecognition(ComponentRecord record, String timing) {
-        componentRecord = record;
-        showFinalRecognition(ScanInputMode.LABEL, record.summary());
-        appendRecognitionLog("5/5 " + timing);
-        appendRecognitionLog("模板阶段：全部模型完成后生成");
-        if (workMode == WorkMode.COMPONENT_ORGANIZATION) {
-            renderTemplatePanel();
-            regenerateComponentDocument();
-        }
-        showProcessingFrame(lastLabelFrame, "5/5 · 融合完成，模板已生成");
-        finishLabelProcessing();
-    }
-
-    /** VLM 流式输出只进入右侧识别日志，底部始终留给最终结构化结果。 */
-    private void showVlmText(OcrResult cascade, String vlmText, String header) {
-        recognitionStream = "\n── " + header + " ──\n" + vlmText;
-        renderRecognitionLog();
-    }
-
-    /** VLM 状态统一追加到右侧日志。UI 线程调用。 */
-    private void appendVlmNote(String note) {
-        appendRecognitionLog(note);
-    }
-
-    private void prepareFinalRecognitionArea(ScanInputMode mode) {
-        if (qrResultText != null) qrResultText.setText(mode.label);
-        if (qrParseSummary != null) qrParseSummary.setText("暂无最终结果");
-    }
-
-    private void showFinalRecognition(ScanInputMode mode, String result) {
-        if (qrResultText != null) qrResultText.setText(mode.label);
-        if (qrParseSummary != null) {
-            qrParseSummary.setText(result == null || result.trim().isEmpty()
-                    ? "未识别到有效内容" : result.trim());
-        }
-    }
-
-    private void resetRecognitionLog(String firstLine) {
-        recognitionLog.setLength(0);
-        recognitionStream = "";
-        appendRecognitionLog(firstLine);
-    }
-
-    private void appendRecognitionLog(String note) {
-        if (note == null || note.trim().isEmpty()) return;
-        if (recognitionLog.length() > 0) recognitionLog.append('\n');
-        recognitionLog.append(note.trim());
-        renderRecognitionLog();
-    }
-
-    private void renderRecognitionLog() {
-        if (componentRecordSummary == null) return;
-        componentRecordSummary.setText(recognitionLog.toString() + recognitionStream);
-        componentRecordSummary.post(() -> {
-            int lineBottom = componentRecordSummary.getLayout() == null ? 0
-                    : componentRecordSummary.getLayout().getLineBottom(
-                    Math.max(0, componentRecordSummary.getLineCount() - 1));
-            componentRecordSummary.scrollTo(0, Math.max(0,
-                    lineBottom - componentRecordSummary.getHeight()));
-        });
-    }
-
-    private Button findScanButton() {
-        View button = findViewById(R.id.scanButton);
-        return button instanceof Button ? (Button) button : null;
-    }
-
-    /** PP-OCR 只展示中间结果，不提前改模板。 */
-    private void showCascadeOcrPreview(Bitmap frame, OcrResult result,
-                                       ComponentRecord record) {
-        if (result.lines.isEmpty()) {
-            String status = recognitionSettings.ppOcrEnabled
-                    ? "PP-OCR 未识别到文字，继续等待 GLM-OCR"
-                    : "PP-OCR 已关闭，直接进入 GLM-OCR";
-            appendRecognitionLog("3/5 " + status);
-            showProcessingFrame(frame, "3/5 · " + status);
-            return;
-        }
-        String summary = record.summary() + "\n" + result.timingSummary()
-                + "\nPP-OCR 为中间结果；模板等待全部模型完成";
-        appendRecognitionLog("3/5 PP-OCR 原文：\n" + result.fullText());
-        appendRecognitionLog(summary);
-        showProcessingFrame(drawOcrRegions(frame, result),
-                "3/5 · PP-OCR 已定位 " + result.lines.size() + " 行文字");
-    }
-
-    private void beginProcessingPreview(Bitmap frame, String stage) {
-        cameraSuspendedForProcessing = true;
-        if (barcodeScanner != null) barcodeScanner.pause();
-        if (labelGuideOverlay != null) labelGuideOverlay.setVisibility(View.GONE);
-        if (processingPreview != null) {
-            processingPreview.setImageBitmap(frame);
-            processingPreview.setVisibility(View.VISIBLE);
-        }
-        if (processingStageBadge != null) {
-            processingStageBadge.setText(stage);
-            processingStageBadge.setVisibility(View.VISIBLE);
-        }
-    }
-
-    private void showCodeProcessingPreview(BarcodeResult result) {
-        if (result == null || barcodeScanner == null) return;
-        Bitmap resolved = result.getBitmapWithResultPoints(Color.rgb(234, 118, 91));
-        if (resolved == null) return;
-        cameraSuspendedForProcessing = true;
-        barcodeScanner.pause();
-        if (processingPreview != null) {
-            processingPreview.setImageBitmap(resolved);
-            processingPreview.setVisibility(View.VISIBLE);
-        }
-        if (processingStageBadge != null) {
-            processingStageBadge.setText(scanInputMode.label + "已定位 · 正在本机解析");
-            processingStageBadge.setVisibility(View.VISIBLE);
-        }
-        View anchor = processingPreview != null ? processingPreview : barcodeScanner;
-        anchor.postDelayed(() -> {
-            cameraSuspendedForProcessing = false;
-            if (processingPreview != null) {
-                processingPreview.setImageDrawable(null);
-                processingPreview.setVisibility(View.GONE);
-            }
-            if (processingStageBadge != null) processingStageBadge.setVisibility(View.GONE);
-            if (embeddedCameraActive) {
-                barcodeScanner.resume();
-                if (recognitionSettings.isContinuous(scanInputMode)) startModeDecoding();
-            }
-            applyScanInputModeUi();
-        }, 750L);
-    }
-
-    private void showProcessingFrame(Bitmap frame, String stage) {
-        if (processingPreview != null && frame != null
-                && (recognitionSettings.showProcessingPreview
-                || processingPreview.getDrawable() == null || stage.startsWith("5/5"))) {
-            processingPreview.setImageBitmap(frame);
-            processingPreview.setVisibility(View.VISIBLE);
-        }
-        if (processingStageBadge != null) {
-            processingStageBadge.setText(stage);
-            processingStageBadge.setVisibility(View.VISIBLE);
-        }
-    }
-
-    /** 完成后短暂保留最终处理图，再恢复实时摄像头。 */
-    private void finishLabelProcessing() {
-        View anchor = processingPreview != null ? processingPreview : barcodeScanner;
-        if (anchor == null) return;
-        anchor.postDelayed(() -> {
-            ocrRunning = false;
-            cameraSuspendedForProcessing = false;
-            if (processingPreview != null) {
-                processingPreview.setImageDrawable(null);
-                processingPreview.setVisibility(View.GONE);
-            }
-            if (processingStageBadge != null) processingStageBadge.setVisibility(View.GONE);
-            if (barcodeScanner != null && embeddedCameraActive) {
-                barcodeScanner.resume();
-                startModeDecoding();
-            }
-            applyScanInputModeUi();
-            setScanButtonBusy(false);
-        }, 900L);
-    }
-
-    private void failLabelProcessing(String detail, String message) {
-        appendRecognitionLog("识别未完成：" + detail);
-        if (processingStageBadge != null) processingStageBadge.setText("识别未完成 · " + message);
-        toast(message);
-        finishLabelProcessing();
-    }
-
-    private static List<RectF> protectedTextRegions(OcrResult result) {
-        List<RectF> regions = new ArrayList<>();
-        for (OcrLine line : result.lines) {
-            if (line.hasRect()) {
-                regions.add(new RectF(line.left, line.top, line.right, line.bottom));
-            }
-        }
-        return regions;
-    }
-
-    private static Bitmap drawOcrRegions(Bitmap source, OcrResult result) {
-        Bitmap annotated = source.copy(Bitmap.Config.ARGB_8888, true);
-        if (annotated == null) return source;
-        Canvas canvas = new Canvas(annotated);
-        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        paint.setStyle(Paint.Style.STROKE);
-        paint.setStrokeWidth(Math.max(2f, source.getWidth() / 420f));
-        paint.setColor(Color.rgb(234, 118, 91));
-        for (OcrLine line : result.lines) {
-            if (line.hasRect()) canvas.drawRect(line.left, line.top, line.right, line.bottom, paint);
-        }
-        return annotated;
-    }
-
-    /** 切入标签档时后台预热模型（幂等，失败只记录不崩溃）。VLM 模型大、加载慢，一并预热。 */
-    private void warmUpLabelOcr() {
-        if (recognitionSettings.ppOcrEnabled
-                && !labelOcrEngine.isReady() && labelOcrEngine.initError() == null) {
-            ocrExecutor.execute(() -> labelOcrEngine.load(getApplicationContext()));
-        }
-        if (recognitionSettings.vlmEnabled
-                && !vlmOcrEngine.isReady() && vlmOcrEngine.initError() == null) {
-            ocrExecutor.execute(() -> vlmOcrEngine.load(getApplicationContext()));
-        }
-    }
-
-    private void setScanButtonBusy(boolean busy) {
-        View button = findViewById(R.id.scanButton);
-        if (!(button instanceof Button)) return;
-        button.setEnabled(!busy);
-        if (busy) ((Button) button).setText("识别中…");
-        else updateScanButtonLabel();
-    }
-
-    private static TextureView findTextureView(View root) {
-        if (root instanceof TextureView) return (TextureView) root;
-        if (root instanceof ViewGroup) {
-            ViewGroup group = (ViewGroup) root;
-            for (int index = 0; index < group.getChildCount(); index++) {
-                TextureView found = findTextureView(group.getChildAt(index));
-                if (found != null) return found;
-            }
-        }
-        return null;
-    }
-
-    private void launchScanner() {
-        ScanOptions options = new ScanOptions()
-                .setDesiredBarcodeFormats(ScanFormatCatalog.formatNames(
-                        scanInputMode, recognitionSettings))
-                .setPrompt(scanInputMode == ScanInputMode.BARCODE ? "将条形码放入取景框" : "将二维码放入取景框")
-                .setBeepEnabled(false)
-                .setOrientationLocked(false)
-                .setBarcodeImageEnabled(false);
-        options.addExtra(Intents.Scan.SCAN_TYPE, Intents.Scan.MIXED_SCAN);
-        scanLauncher.launch(options);
-    }
-
-    private void handleScanResult(ScanIntentResult result) {
-        String contents = result.getContents();
-        if (contents == null) return;
-        consumeScannedContent(contents);
-    }
-
-    private void consumeScannedContent(String contents) {
-        lastScannedContent = contents;
-        lastScannedAt = System.currentTimeMillis();
-        if (workMode == WorkMode.COMPONENT_ORGANIZATION) {
-            applyComponentScan(contents, true);
-            return;
-        }
-        QrContentParser.Parsed parsed = QrContentParser.parse(contents);
-        resetRecognitionLog(scanInputMode.label + "识别完成");
-        appendRecognitionLog("原始内容：" + contents);
-        appendRecognitionLog("本机解析：" + parsed.summary());
-        showFinalRecognition(scanInputMode,
-                (scanInputMode == ScanInputMode.BARCODE ? "条形码内容：" : "二维码内容：")
-                        + contents + "\n解析结果：" + parsed.summary());
-        applyScannedContentToCanvas(contents);
-    }
-
-    private void applyComponentScan(String contents, boolean announce) {
-        componentRecord = ComponentLabelParser.parse(contents, supplierFormat);
-        String summary = componentRecord.summary();
-        resetRecognitionLog(scanInputMode.label + "本机解析完成");
-        appendRecognitionLog("原始内容：" + contents);
-        appendRecognitionLog(summary);
-        showFinalRecognition(scanInputMode, summary);
-        renderTemplatePanel();
-        boolean printable = componentRecord.recognized
-                || !componentRecord.supplierPartNumber.isEmpty()
-                || !componentRecord.manufacturerPartNumber.isEmpty();
-        if (!printable) {
-            if (announce) toast("未识别供应商贴纸，已保留原始内容，请切换供应商后核对");
-            return;
-        }
-        float width = document.widthMm;
-        float height = document.heightMm;
-        document = ComponentLabelFactory.create(componentRecord, selectedProfile.dpi, width, height,
-                componentTemplate, templateBoldHeadline, templateLargeFont, templateFields);
-        labelCanvas.setDocument(document);
-        TextElement first = document.elements.isEmpty() ? null : document.elements.get(0);
-        labelCanvas.select(first == null ? null : first.id);
-        showSelectedElement(first);
-        refreshDocumentControls();
-        persistAndRedraw();
-        if (announce) toast("已离线解析" + componentRecord.supplier.label + "贴纸并生成器件标签");
-    }
-
-    private void applyScannedContentToCanvas(String contents) {
-        TextElement selected = labelCanvas.getSelectedElement();
-        if (selected == null) selected = document.addText(contents);
-        else selected.text = contents;
-        labelCanvas.select(selected.id);
-        showSelectedElement(selected);
-        persistAndRedraw();
-        toast(scanInputMode == ScanInputMode.BARCODE
-                ? "已识别条形码并放入右侧画布" : "已解析二维码并放入右侧画布");
-    }
-
-    private void startEmbeddedScanner() {
-        if (barcodeScanner == null) return;
-        embeddedCameraActive = true;
-        singleDecodeComplete = false;
-        barcodeScanner.resume();
-        applyDecoderFormats();
-        startModeDecoding();
-        updateScanButtonLabel();
-    }
-
-    private void pauseEmbeddedScanner() {
-        if (barcodeScanner == null) return;
-        embeddedCameraActive = false;
-        barcodeScanner.pause();
-        updateScanButtonLabel();
-    }
-
     private void applyCanvasSize() {
         if (widthInput == null || heightInput == null) {
             showCustomLabelSizeDialog();
@@ -2855,8 +905,9 @@ public final class MainActivity extends AppCompatActivity {
     private void resizeDocument(float width, float height) {
         if (workMode == WorkMode.COMPONENT_ORGANIZATION && componentRecord != null) {
             document = ComponentLabelFactory.create(componentRecord, selectedProfile.dpi,
-                    width, height, componentTemplate, templateBoldHeadline,
-                    templateLargeFont, templateFields);
+                    width, height, templateController.componentTemplate(),
+                    templateController.templateBoldHeadline(),
+                    templateController.templateLargeFont(), templateController.templateFields());
             labelCanvas.setDocument(document);
             TextElement first = document.elements.isEmpty() ? null : document.elements.get(0);
             labelCanvas.select(first == null ? null : first.id);
@@ -2874,7 +925,7 @@ public final class MainActivity extends AppCompatActivity {
         if (heightInput != null) heightInput.setText(formatNumber(document.heightMm));
         if (dpiSpinner != null) dpiSpinner.setText(selectedProfile.dpi + " DPI");
         refreshLabelSizeSpinner();
-        refreshBorderStyleButton();
+        elementEditorController.refreshBorderStyleButton();
         updateCompatibilityWarning();
     }
 
@@ -2919,9 +970,9 @@ public final class MainActivity extends AppCompatActivity {
 
         LinearLayout fields = new LinearLayout(this);
         fields.setGravity(android.view.Gravity.CENTER_VERTICAL);
-        EditText customWidth = geometryInput(document.widthMm);
+        EditText customWidth = elementEditorController.geometryInput(document.widthMm);
         customWidth.setHint("宽 mm");
-        EditText customHeight = geometryInput(document.heightMm);
+        EditText customHeight = elementEditorController.geometryInput(document.heightMm);
         customHeight.setHint("高 mm");
         fields.addView(customWidth, new LinearLayout.LayoutParams(0, dp(52), 1f));
         TextView separator = new TextView(this);
@@ -2959,211 +1010,7 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     private void showSelectedElement(@Nullable TextElement element) {
-        populatingEditor = true;
-        textEditorCard.setVisibility(element == null
-                || workMode == WorkMode.COMPONENT_ORGANIZATION ? View.GONE : View.VISIBLE);
-        if (element != null) {
-            if (editorTitle != null) editorTitle.setText(titleFor(element));
-            if (elementXInput != null) elementXInput.setText(formatNumber(element.xMm));
-            if (elementYInput != null) elementYInput.setText(formatNumber(element.yMm));
-            if (elementWidthInput != null) elementWidthInput.setText(formatNumber(element.widthMm));
-            if (elementHeightInput != null) elementHeightInput.setText(formatNumber(element.heightMm));
-            boolean textual = element.isTextual();
-            boolean codeContent = TextElement.TYPE_BARCODE.equals(element.type)
-                    || TextElement.TYPE_QRCODE.equals(element.type);
-            boolean hasContent = (textual && !TextElement.TYPE_TIME.equals(element.type))
-                    || codeContent;
-            textInput.setVisibility(hasContent ? View.VISIBLE : View.GONE);
-            if (hasContent) {
-                textInput.setHint(contentHintFor(element));
-                textInput.setText(element.text);
-                textInput.setSelection(textInput.length());
-            }
-            if (rowFont != null) rowFont.setVisibility(textual ? View.VISIBLE : View.GONE);
-            fontSizeInput.setText(formatNumber(element.fontSizePt));
-            boldCheck.setChecked(element.bold);
-            alignmentSpinner.setSelection(element.alignment);
-            if (rowBarcode != null) {
-                rowBarcode.setVisibility(TextElement.TYPE_BARCODE.equals(element.type)
-                        ? View.VISIBLE : View.GONE);
-            }
-            if (barcodeFormatSpinner != null && TextElement.TYPE_BARCODE.equals(element.type)) {
-                barcodeFormatSpinner.setSelection(barcodeFormatIndex(element.format));
-            }
-            if (barcodeTextPositionSpinner != null) {
-                barcodeTextPositionSpinner.setSelection(barcodeTextPositionIndex(
-                        element.effectiveBarcodeTextPosition()));
-            }
-            if (rowQr != null) {
-                rowQr.setVisibility(TextElement.TYPE_QRCODE.equals(element.type)
-                        ? View.VISIBLE : View.GONE);
-            }
-            boolean code = TextElement.TYPE_BARCODE.equals(element.type)
-                    || TextElement.TYPE_QRCODE.equals(element.type);
-            if (rowCodeLayout != null) {
-                rowCodeLayout.setVisibility(code ? View.VISIBLE : View.GONE);
-            }
-            if (qrFormatSpinner != null && TextElement.TYPE_QRCODE.equals(element.type)) {
-                qrFormatSpinner.setSelection(twoDimensionalFormatIndex(element.format));
-            }
-            if (qrErrorCorrectionSpinner != null) {
-                qrErrorCorrectionSpinner.setSelection(qrErrorCorrectionIndex(
-                        element.qrErrorCorrection));
-                qrErrorCorrectionSpinner.setEnabled(TextElement.TYPE_QRCODE.equals(element.type)
-                        && "QR_CODE".equals(element.format));
-            }
-            if (codeQuietZoneSpinner != null) {
-                codeQuietZoneSpinner.setSelection(quietZoneIndex(element.quietZoneModules));
-            }
-            if (codeRotationSpinner != null) {
-                codeRotationSpinner.setSelection(element.rotationDegrees / 90);
-            }
-            if (rowLine != null) {
-                rowLine.setVisibility(TextElement.TYPE_LINE.equals(element.type)
-                        ? View.VISIBLE : View.GONE);
-            }
-            if (lineOrientationSpinner != null) {
-                lineOrientationSpinner.setSelection("v".equals(element.format) ? 1 : 0);
-            }
-            if (lineWidthInput != null) lineWidthInput.setText(formatNumber(element.lineWidthMm));
-            if (rowRect != null) {
-                rowRect.setVisibility(TextElement.TYPE_RECT.equals(element.type)
-                        ? View.VISIBLE : View.GONE);
-            }
-            if (rectWidthInput != null) rectWidthInput.setText(formatNumber(element.lineWidthMm));
-            if (rectFilledCheck != null) rectFilledCheck.setChecked(element.filled);
-            if (rowTime != null) {
-                rowTime.setVisibility(TextElement.TYPE_TIME.equals(element.type)
-                        ? View.VISIBLE : View.GONE);
-            }
-            if (timeFormatSpinner != null) {
-                timeFormatSpinner.setSelection(
-                        TimeElementFormat.byPattern(element.format).ordinal());
-            }
-            if (rowArc != null) {
-                rowArc.setVisibility(TextElement.TYPE_ARCTEXT.equals(element.type)
-                        ? View.VISIBLE : View.GONE);
-            }
-            if (arcDirectionSpinner != null) {
-                arcDirectionSpinner.setSelection("down".equals(element.format) ? 1 : 0);
-            }
-            if (rowSerial != null) {
-                rowSerial.setVisibility(TextElement.TYPE_SERIAL.equals(element.type)
-                        ? View.VISIBLE : View.GONE);
-            }
-            if (TextElement.TYPE_SERIAL.equals(element.type)) {
-                if (serialValueInput != null) serialValueInput.setText(Integer.toString(element.serialCounter));
-                if (serialStepInput != null) serialStepInput.setText(Integer.toString(element.serialStep));
-                if (serialDigitsInput != null) serialDigitsInput.setText(Integer.toString(element.serialDigits));
-            }
-            if (rowImage != null) {
-                rowImage.setVisibility(TextElement.TYPE_IMAGE.equals(element.type)
-                        ? View.VISIBLE : View.GONE);
-            }
-            if (TextElement.TYPE_IMAGE.equals(element.type)) {
-                if (imageWidthInput != null) imageWidthInput.setText(formatNumber(element.widthMm));
-                if (imageHeightInput != null) imageHeightInput.setText(formatNumber(element.heightMm));
-                if (imageFitSpinner != null) {
-                    imageFitSpinner.setSelection(ImageElementRenderer.fitModeIndex(element.format));
-                }
-            }
-            if (rowIcon != null) {
-                rowIcon.setVisibility(TextElement.TYPE_ICON.equals(element.type)
-                        ? View.VISIBLE : View.GONE);
-            }
-            if (iconStyleSpinner != null) {
-                iconStyleSpinner.setSelection(IconCatalog.indexOf(element.format));
-            }
-            if (iconLineWidthInput != null) {
-                iconLineWidthInput.setText(formatNumber(element.lineWidthMm));
-            }
-            if (rowTable != null) {
-                rowTable.setVisibility(TextElement.TYPE_TABLE.equals(element.type)
-                        ? View.VISIBLE : View.GONE);
-            }
-            if (TextElement.TYPE_TABLE.equals(element.type)) {
-                if (tableRowsInput != null) tableRowsInput.setText(Integer.toString(element.tableRows));
-                if (tableColsInput != null) tableColsInput.setText(Integer.toString(element.tableCols));
-                if (tableLineWidthInput != null) {
-                    tableLineWidthInput.setText(formatNumber(element.lineWidthMm));
-                }
-            }
-            if (lockCheck != null) lockCheck.setChecked(element.locked);
-        }
-        populatingEditor = false;
-    }
-
-    private static String contentHintFor(TextElement element) {
-        switch (element.type) {
-            case TextElement.TYPE_BARCODE: return "一维码内容";
-            case TextElement.TYPE_QRCODE: return "二维码内容";
-            case TextElement.TYPE_SERIAL: return "序列号前缀";
-            case TextElement.TYPE_TABLE: return "表格内容（每行一个单元格）";
-            case TextElement.TYPE_TIME: return "时间元素按下方格式自动生成";
-            case TextElement.TYPE_ARCTEXT: return "弧形文字内容";
-            default: return "文本内容";
-        }
-    }
-
-    private static String titleFor(TextElement element) {
-        switch (element.type) {
-            case TextElement.TYPE_BARCODE: return "所选一维码";
-            case TextElement.TYPE_QRCODE: return "所选二维码";
-            case TextElement.TYPE_LINE: return "所选线条";
-            case TextElement.TYPE_RECT: return "所选矩形";
-            case TextElement.TYPE_TIME: return "所选时间";
-            case TextElement.TYPE_SERIAL: return "所选序列号（前缀在上方编辑）";
-            case TextElement.TYPE_ARCTEXT: return "所选弧形文字";
-            case TextElement.TYPE_IMAGE: return "所选图片";
-            case TextElement.TYPE_ICON: return "所选图标";
-            case TextElement.TYPE_TABLE: return "所选表格（上方每行一个单元格）";
-            case TextElement.TYPE_TEXT:
-            default: return "所选文本";
-        }
-    }
-
-    private static int barcodeFormatIndex(String format) {
-        if ("ITF".equals(format)) format = "ITF_25";
-        for (int index = 0; index < BarcodeRasterizer.BARCODE_FORMATS.length; index++) {
-            if (BarcodeRasterizer.BARCODE_FORMATS[index].equals(format)) return index;
-        }
-        return 0;
-    }
-
-    private static int twoDimensionalFormatIndex(String format) {
-        for (int index = 0; index < BarcodeRasterizer.TWO_DIMENSIONAL_FORMATS.length; index++) {
-            if (BarcodeRasterizer.TWO_DIMENSIONAL_FORMATS[index].equals(format)) return index;
-        }
-        return 0;
-    }
-
-    private static int barcodeTextPositionIndex(String value) {
-        if ("top".equals(value)) return 1;
-        if ("bottom".equals(value)) return 2;
-        return 0;
-    }
-
-    private static int quietZoneIndex(int value) {
-        if (value >= 4) return 2;
-        if (value >= 2) return 1;
-        return 0;
-    }
-
-    private static int qrErrorCorrectionIndex(String value) {
-        if ("L".equals(value)) return 0;
-        if ("Q".equals(value)) return 2;
-        if ("H".equals(value)) return 3;
-        return 1;
-    }
-
-    private void deleteSelected() {
-        TextElement selected = labelCanvas.getSelectedElement();
-        if (selected == null) return;
-        document.remove(selected.id);
-        TextElement replacement = document.elements.isEmpty() ? null : document.elements.get(0);
-        labelCanvas.select(replacement == null ? null : replacement.id);
-        showSelectedElement(replacement);
-        persistAndRedraw();
+        elementEditorController.showSelectedElement(element);
     }
 
     private void showPreview() {
@@ -3252,191 +1099,11 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     private void showAutomaticDiscoveryDialog() {
-        Map<String, DeviceCandidate> candidates = new LinkedHashMap<>();
-        List<RankedPrinter> displayed = new ArrayList<>();
-        List<String> labels = new ArrayList<>();
-        ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, labels);
-        TextView status = new TextView(this);
-        status.setText("正在检查 USB、已配对 SPP 并扫描附近 BLE（10 秒）…");
-        status.setPadding(dp(18), dp(12), dp(18), dp(8));
-        ListView list = new ListView(this);
-        list.setAdapter(adapter);
-        LinearLayout container = new LinearLayout(this);
-        container.setOrientation(LinearLayout.VERTICAL);
-        container.addView(status);
-        container.addView(list, new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(360)));
-
-        AlertDialog dialog = new AlertDialog.Builder(this)
-                .setTitle("自动寻找打印机")
-                .setView(container)
-                .setNeutralButton("显示全部设备", null)
-                .setNegativeButton("取消", null)
-                .create();
-        boolean[] manualMode = {false};
-        String lastAddress = DeviceHistoryStore.lastAddress(this);
-        TransportType lastTransport = DeviceHistoryStore.lastTransport(this);
-        PrinterProfile lastProfile = DeviceHistoryStore.lastProfile(this);
-        Runnable refresh = () -> refreshDiscoveryList(candidates, displayed, labels, adapter,
-                status, manualMode[0], lastAddress, lastTransport, lastProfile);
-
-        if (printerService == null) return;
-        for (DeviceCandidate candidate : printerService.usbDevices()) {
-            candidates.put(candidateKey(candidate), candidate);
-        }
-        if (printerService.isBluetoothEnabled()) for (DeviceCandidate candidate : printerService.bondedClassicDevices()) {
-            candidates.put(candidateKey(candidate), candidate);
-        }
-        refresh.run();
-        dialog.setOnDismissListener(value -> printerService.stopBleScan());
-        list.setOnItemClickListener((parent, view, position, id) -> {
-            RankedPrinter ranked = displayed.get(position);
-            showPrinterCandidateDetails(ranked, dialog);
-        });
-        dialog.show();
-        dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(view -> {
-            manualMode[0] = true;
-            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setEnabled(false);
-            refresh.run();
-        });
-
-        BluetoothPrinterManager.ScanListener scanListener = new BluetoothPrinterManager.ScanListener() {
-            @Override
-            public void onDevice(DeviceCandidate candidate) {
-                candidates.put(candidateKey(candidate), candidate);
-                refresh.run();
-            }
-
-            @Override
-            public void onFinished() {
-                refresh.run();
-                if (displayed.isEmpty()) {
-                    status.setText("未自动识别到打印机；可显示全部设备手动选择");
-                } else {
-                    status.setText("扫描完成：已按可信度排序。请点击目标打印机，确认后才会连接");
-                }
-            }
-
-            @Override
-            public void onError(String message) {
-                status.setText(displayed.isEmpty() ? message : message + "；仍可选择已列出的端点");
-            }
-        };
-        if (printerService.isBluetoothEnabled()) printerService.startBleScan(scanListener);
-        else scanListener.onFinished();
-    }
-
-    private void refreshDiscoveryList(Map<String, DeviceCandidate> candidates,
-                                      List<RankedPrinter> displayed, List<String> labels,
-                                      ArrayAdapter<String> adapter, TextView status,
-                                      boolean manualMode, String lastAddress,
-                                      TransportType lastTransport, PrinterProfile lastProfile) {
-        List<RankedPrinter> ranked = new ArrayList<>();
-        for (DeviceCandidate candidate : candidates.values()) {
-            boolean remembered = candidate.transport == lastTransport
-                    && candidate.address.equalsIgnoreCase(lastAddress);
-            PrinterMatch match = PrinterDiscoveryEngine.evaluate(candidate, remembered ? lastAddress : null);
-            PrinterProfile profile;
-            if (match.suggestedProfile != null
-                    && match.suggestedProfile.protocol == ProtocolType.DOTHAN_PRIVATE) {
-                profile = ProfileStore.load(this, match.suggestedProfile);
-            } else if (remembered) {
-                profile = lastProfile;
-            } else if (match.suggestedProfile != null) {
-                profile = ProfileStore.load(this, match.suggestedProfile);
-            } else if (match.identity != null && match.identity.dpi == 203
-                    && match.identity.widthDots == 384) {
-                profile = ProfileStore.load(this, DeviceCatalog.defaultProfile());
-            } else {
-                profile = selectedProfile;
-            }
-            if (manualMode || match.isLikelyPrinter()) ranked.add(new RankedPrinter(candidate, match, profile));
-        }
-        ranked.sort(Comparator
-                .comparingInt((RankedPrinter value) -> value.match.score).reversed()
-                .thenComparing(Comparator.comparingInt(
-                        (RankedPrinter value) -> value.candidate.rssi).reversed()));
-        displayed.clear();
-        displayed.addAll(ranked);
-        labels.clear();
-        for (RankedPrinter value : displayed) labels.add(formatRankedPrinter(value));
-        adapter.notifyDataSetChanged();
-        if (!manualMode) {
-            status.setText(displayed.isEmpty()
-                    ? "扫描中，暂未发现具有打印机特征的设备…"
-                    : "已识别 " + displayed.size() + " 个候选；只发现不连接，请点击目标打印机");
-        } else {
-            status.setText("手动模式：显示全部 " + displayed.size() + " 个硬件端点");
-        }
-    }
-
-    private static String formatRankedPrinter(RankedPrinter value) {
-        String marker = value.match.privateProtocolRisk ? "◆ 已识别（协议待确认）"
-                : value.match.score >= 85 ? "★ 推荐（需点击）"
-                : value.match.score >= 60 ? "● 候选" : "○ 待确认";
-        String risk = value.match.privateProtocolRisk ? " · 私有协议风险" : "";
-        String identity = value.match.identity == null ? ""
-                : " · " + value.match.identity.manufacturer;
-        return marker + " · " + value.match.confidence + " " + value.match.score + " 分" + risk
-                + "\n" + value.candidate.name + " · " + value.candidate.transport.label
-                + identity + "\n" + value.profile.protocol.label + " · " + value.match.reason;
-    }
-
-    private static String candidateKey(DeviceCandidate candidate) {
-        return candidate.transport.name() + '|' + candidate.address;
-    }
-
-    private void showPrinterCandidateDetails(RankedPrinter ranked, AlertDialog discoveryDialog) {
-        DeviceCandidate candidate = ranked.candidate;
-        PrinterIdentity identity = ranked.match.identity;
-        StringBuilder details = new StringBuilder()
-                .append("设备名称：").append(candidate.name)
-                .append("\n连接方式：").append(candidate.transport.label)
-                .append("\n设备地址：").append(candidate.address);
-        if (candidate.transport == TransportType.BLE_GATT && candidate.rssi != 0) {
-            details.append("\n信号强度：").append(candidate.rssi).append(" dBm");
-        }
-        if (identity != null) {
-            details.append("\n\n识别系列：").append(identity.family)
-                    .append("\n制造商：").append(identity.manufacturer)
-                    .append("\n设备类型：").append(identity.deviceType)
-                    .append("\n打印规格：").append(identity.specification());
-        }
-        details.append("\n\n识别可信度：").append(ranked.match.confidence)
-                .append("（").append(ranked.match.score).append(" 分）")
-                .append("\n识别依据：").append(ranked.match.reason)
-                .append("\n拟用档案：").append(ranked.profile.label);
-        if (ranked.match.privateProtocolRisk) {
-            details.append("\n\n注意：该系列使用厂商私有协议。当前只确认硬件身份和 BLE 通道，")
-                    .append("不会把它伪装成已验证的公开打印协议。");
-        }
-        new AlertDialog.Builder(this)
-                .setTitle("确认目标打印机")
-                .setMessage(details.toString())
-                .setNegativeButton("返回列表", null)
-                .setPositiveButton("连接此打印机", (dialog, which) -> {
-                    discoveryDialog.dismiss();
-                    connectRankedPrinter(ranked);
-                })
-                .show();
-    }
-
-    private void connectRankedPrinter(RankedPrinter ranked) {
-        if (ranked.match.privateProtocolRisk) {
-            new AlertDialog.Builder(this)
-                    .setTitle("可能是厂商私有协议设备")
-                    .setMessage("已确认设备身份和 203 DPI / 384 点尺寸，但尚未确认其上层打印协议。"
-                            + "当前版本不绕过厂商授权；只有设备同时接受所选公开档案时才能打印。")
-                    .setPositiveButton("按尺寸档案连接", (dialog, which) -> {
-                        selectProfile(ranked.profile, false);
-                        connectWithProfile(ranked.candidate, ranked.profile);
-                    })
-                    .setNegativeButton("取消", null)
-                    .show();
-            return;
-        }
-        selectProfile(ranked.profile, true);
-        connectWithProfile(ranked.candidate, ranked.profile);
+        PrinterDiscoveryDialog.show(this, printerService, selectedProfile,
+                (candidate, profile, automatic) -> {
+                    selectProfile(profile, automatic);
+                    connectWithProfile(candidate, profile);
+                });
     }
 
     private void connectWithProfile(DeviceCandidate candidate, PrinterProfile profile) {
@@ -3608,228 +1275,27 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     private void showModelConfigDialog() {
-        VlmSettings current = VlmSettingsStore.load(this);
-        RecognitionSettings recognition = RecognitionSettingsStore.load(this);
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(14), dp(8), dp(14), dp(8));
+        ModelConfigDialog.show(this, scannerController.scanInputMode(), new ModelConfigDialog.Listener() {
+            @Override
+            public void onSettingsSaved(RecognitionSettings saved) {
+                recognitionSettings = saved;
+                scannerController.resetSingleDecode();
+                recognitionController.closeVlmEngine();
+                scannerController.applyDecoderFormats();
+                scannerController.startModeDecoding();
+                scannerController.applyScanInputModeUi();
+                if (scannerController.scanInputMode() == ScanInputMode.LABEL) recognitionController.warmUpLabelOcr();
+            }
 
-        TextView overview = new TextView(this);
-        overview.setText("三种识别模式独立配置并持久化；每个工作页面也会分别记住最后使用的扫描档位。"
-                + " 标签处理固定在全部模型结束后才生成模板，冲突字段默认由 GLM-OCR 优先。");
-        overview.setTextColor(ContextCompat.getColor(this, R.color.eprint_muted));
-        overview.setPadding(dp(4), 0, dp(4), dp(8));
-        root.addView(overview);
-
-        LinearLayout tabs = new LinearLayout(this);
-        tabs.setOrientation(LinearLayout.HORIZONTAL);
-        Button labelTab = createConfigTab("标签");
-        Button qrTab = createConfigTab("二维码");
-        Button barcodeTab = createConfigTab("条形码");
-        tabs.addView(labelTab, weightedParams());
-        tabs.addView(qrTab, weightedParams());
-        tabs.addView(barcodeTab, weightedParams());
-        root.addView(tabs, new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(46)));
-
-        FrameLayout pageHost = new FrameLayout(this);
-        LinearLayout labelPage = configPage();
-        LinearLayout qrPage = configPage();
-        LinearLayout barcodePage = configPage();
-        pageHost.addView(labelPage);
-        pageHost.addView(qrPage);
-        pageHost.addView(barcodePage);
-        root.addView(pageHost, new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-        Button[] tabButtons = {labelTab, qrTab, barcodeTab};
-        View[] pages = {labelPage, qrPage, barcodePage};
-        labelTab.setOnClickListener(view -> selectConfigPage(tabButtons, pages, 0));
-        qrTab.setOnClickListener(view -> selectConfigPage(tabButtons, pages, 1));
-        barcodeTab.setOnClickListener(view -> selectConfigPage(tabButtons, pages, 2));
-
-        addConfigSection(labelPage, "标签识别总开关与流程");
-        CheckBox labelEnabled = addConfigCheck(labelPage, "启用标签识别", recognition.labelEnabled);
-        CheckBox ppEnabled = addConfigCheck(labelPage, "启用 PP-OCRv6（文字检测/方向/识别）",
-                recognition.ppOcrEnabled);
-        CheckBox vlmEnabled = addConfigCheck(labelPage, "启用 GLM-OCR 信息提取",
-                recognition.vlmEnabled);
-        CheckBox cropLabel = addConfigCheck(labelPage, "自动定位标签并清除标签外区域",
-                recognition.cropToLabel);
-        CheckBox maskCodes = addConfigCheck(labelPage,
-                "实验：送入 GLM 前遮盖二维码/一维码（默认关闭）",
-                recognition.maskCodesBeforeVlm);
-        CheckBox weakMask = addConfigCheck(labelPage,
-                "实验性弱码条纹定位（默认关闭；可能误伤文字）",
-                recognition.experimentalWeakCodeMask);
-        CheckBox processingStages = addConfigCheck(labelPage, "显示每一步实时处理图片",
-                recognition.showProcessingPreview);
-        CheckBox glmPriority = addConfigCheck(labelPage,
-                "结果冲突或误差较大时由 GLM-OCR 优先",
-                recognition.preferGlmOnConflict);
-        EditText minimumCoverage = addSettingField(labelPage,
-                "标签定位最低占比（10-90%）",
-                recognition.minimumLabelCoveragePercent, true);
-        EditText blurThreshold = addSettingField(labelPage,
-                "模糊提示阈值（10-500，越大越严格）",
-                recognition.blurVarianceThreshold, true);
-
-        File modelDir = VlmOcrEngine.modelDir(this);
-        String missing = VlmOcrEngine.missingModelFile(modelDir);
-        addConfigSection(labelPage, "GLM-OCR 0.9B · MNN 运行参数");
-        TextView status = new TextView(this);
-        status.setText("模型：" + (missing == null ? "已部署" : "缺少 " + missing)
-                + "\n目录：" + modelDir.getAbsolutePath()
-                + "\n严格七键 JSON 信息提取；完整 schema 不允许被自定义提示词移除。"
-                + "\n保存后会释放并按新配置重新加载；开发阶段不做失败自动回退。");
-        status.setTextColor(ContextCompat.getColor(this, R.color.eprint_text));
-        status.setTextIsSelectable(true);
-        status.setPadding(0, dp(4), 0, dp(8));
-        labelPage.addView(status);
-        Spinner backend = addModelSettingSpinner(labelPage, "推理后端",
-                VlmSettings.BACKEND_LABELS,
-                VlmSettings.indexOf(current.backend, VlmSettings.BACKEND_VALUES));
-        EditText threads = addSettingField(labelPage, "CPU 线程数（1-8）",
-                current.threadCount, true);
-        Spinner precision = addModelSettingSpinner(labelPage, "计算精度",
-                VlmSettings.PRECISION_LABELS,
-                VlmSettings.indexOf(current.precision, VlmSettings.PRECISION_VALUES));
-        Spinner memory = addModelSettingSpinner(labelPage, "内存策略",
-                VlmSettings.MEMORY_LABELS,
-                VlmSettings.indexOf(current.memory, VlmSettings.MEMORY_VALUES));
-        EditText maxTokens = addSettingField(labelPage, "最大输出 Token（64-2048）",
-                current.maxNewTokens, true);
-        EditText timeout = addSettingField(labelPage, "单次识别超时秒数（10-300）",
-                current.timeoutSeconds, true);
-        EditText repetitionPenalty = addDecimalSettingField(labelPage,
-                "重复惩罚（1.0-3.0；JSON 建议 1.1）", current.repetitionPenalty);
-        EditText presencePenalty = addDecimalSettingField(labelPage,
-                "出现惩罚（0.0-2.0；JSON 建议 0.0）", current.presencePenalty);
-        EditText frequencyPenalty = addDecimalSettingField(labelPage,
-                "频率惩罚（0.0-2.0；JSON 建议 0.0）", current.frequencyPenalty);
-        EditText prompt = addSettingField(labelPage,
-                "信息提取提示词（自动补齐完整 JSON schema）", current.prompt, false);
-
-        addConfigSection(qrPage, "二维码识别");
-        CheckBox qrEnabled = addConfigCheck(qrPage, "启用二维码识别", recognition.qrEnabled);
-        CheckBox qrContinuous = addConfigCheck(qrPage, "连续识别（关闭后每次只识别一个）",
-                recognition.qrContinuous);
-        CheckBox qrTryHarder = addConfigCheck(qrPage, "增强定位 / Try Harder",
-                recognition.qrTryHarder);
-        CheckBox qrInverted = addConfigCheck(qrPage, "同时识别反色码",
-                recognition.qrAlsoInverted);
-        CheckBox qrExtended = addConfigCheck(qrPage,
-                "扩展二维制式（Data Matrix / Aztec / PDF417）",
-                recognition.qrExtendedFormats);
-        CheckBox qrDuplicates = addConfigCheck(qrPage, "2.5 秒内抑制重复结果",
-                recognition.qrSuppressDuplicates);
-        TextView qrHelp = new TextView(this);
-        qrHelp.setText("二维码页只启用所选二维格式，不会混入一维条形码；解析与画布更新均在本机完成。");
-        qrHelp.setTextColor(ContextCompat.getColor(this, R.color.eprint_muted));
-        qrPage.addView(qrHelp);
-
-        addConfigSection(barcodePage, "一维条形码识别");
-        CheckBox barcodeEnabled = addConfigCheck(barcodePage, "启用条形码识别",
-                recognition.barcodeEnabled);
-        CheckBox barcodeContinuous = addConfigCheck(barcodePage,
-                "连续识别（关闭后每次只识别一个）", recognition.barcodeContinuous);
-        CheckBox barcodeTryHarder = addConfigCheck(barcodePage, "增强定位 / Try Harder",
-                recognition.barcodeTryHarder);
-        CheckBox barcodeInverted = addConfigCheck(barcodePage, "同时识别反色码",
-                recognition.barcodeAlsoInverted);
-        addConfigSection(barcodePage, "启用格式组");
-        CheckBox retailFormats = addConfigCheck(barcodePage,
-                "零售码（EAN-13 / EAN-8 / UPC-A / UPC-E）",
-                recognition.barcodeRetailFormats);
-        CheckBox industrialFormats = addConfigCheck(barcodePage,
-                "工业码（Code 128 / Code 39 / Code 93）",
-                recognition.barcodeIndustrialFormats);
-        CheckBox logisticsFormats = addConfigCheck(barcodePage,
-                "物流码（ITF / Codabar）", recognition.barcodeLogisticsFormats);
-        CheckBox barcodeDuplicates = addConfigCheck(barcodePage, "2.5 秒内抑制重复结果",
-                recognition.barcodeSuppressDuplicates);
-
-        int initialPage = scanInputMode == ScanInputMode.LABEL ? 0
-                : scanInputMode == ScanInputMode.QR ? 1 : 2;
-        selectConfigPage(tabButtons, pages, initialPage);
-
-        ScrollView scroll = new ScrollView(this);
-        scroll.addView(root);
-        AlertDialog dialog = new AlertDialog.Builder(this)
-                .setTitle("识别配置 · 标签 / 二维码 / 条形码")
-                .setView(scroll)
-                .setNeutralButton("取消", null)
-                .setNegativeButton("重启应用", null)
-                .setPositiveButton("保存", null)
-                .create();
-        dialog.setOnShowListener(ignored -> {
-            dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setOnClickListener(view -> {
-                dialog.dismiss();
+            @Override
+            public void onRestartRequested() {
                 restartApplication();
-            });
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(view -> {
-                    try {
-                        String promptValue = prompt.getText().toString().trim();
-                        if (labelEnabled.isChecked() && !ppEnabled.isChecked()
-                                && !vlmEnabled.isChecked()) {
-                            throw new IllegalArgumentException("标签识别至少启用 PP-OCR 或 GLM-OCR");
-                        }
-                        if (vlmEnabled.isChecked() && promptValue.isEmpty()) {
-                            throw new IllegalArgumentException("信息提取提示词不能为空");
-                        }
-                        if (barcodeEnabled.isChecked() && !retailFormats.isChecked()
-                                && !industrialFormats.isChecked()
-                                && !logisticsFormats.isChecked()) {
-                            throw new IllegalArgumentException("条形码至少启用一个格式组");
-                        }
-                        VlmSettings saved = new VlmSettings(
-                                VlmSettings.BACKEND_VALUES[backend.getSelectedItemPosition()],
-                                integerInRange(threads, 1, 8, "CPU 线程数"),
-                                VlmSettings.PRECISION_VALUES[precision.getSelectedItemPosition()],
-                                VlmSettings.MEMORY_VALUES[memory.getSelectedItemPosition()],
-                                integerInRange(maxTokens, 64, 2048, "最大输出 Token"),
-                                integerInRange(timeout, 10, 300, "识别超时"),
-                                floatInRange(repetitionPenalty, 1.0f, 3.0f, "重复惩罚"),
-                                floatInRange(presencePenalty, 0.0f, 2.0f, "出现惩罚"),
-                                floatInRange(frequencyPenalty, 0.0f, 2.0f, "频率惩罚"),
-                                promptValue);
-                        RecognitionSettings savedRecognition = new RecognitionSettings(
-                                labelEnabled.isChecked(), ppEnabled.isChecked(),
-                                vlmEnabled.isChecked(), cropLabel.isChecked(),
-                                maskCodes.isChecked(), weakMask.isChecked(),
-                                processingStages.isChecked(), glmPriority.isChecked(),
-                                integerInRange(minimumCoverage, 10, 90, "标签定位最低占比"),
-                                integerInRange(blurThreshold, 10, 500, "模糊提示阈值"),
-                                qrEnabled.isChecked(), qrContinuous.isChecked(),
-                                qrTryHarder.isChecked(), qrInverted.isChecked(),
-                                qrExtended.isChecked(), qrDuplicates.isChecked(),
-                                barcodeEnabled.isChecked(), barcodeContinuous.isChecked(),
-                                barcodeTryHarder.isChecked(), barcodeInverted.isChecked(),
-                                retailFormats.isChecked(), industrialFormats.isChecked(),
-                                logisticsFormats.isChecked(), barcodeDuplicates.isChecked());
-                        VlmSettingsStore.save(this, saved);
-                        RecognitionSettingsStore.save(this, savedRecognition);
-                        recognitionSettings = savedRecognition;
-                        singleDecodeComplete = false;
-                        vlmOcrEngine.close();
-                        applyDecoderFormats();
-                        startModeDecoding();
-                        applyScanInputModeUi();
-                        if (scanInputMode == ScanInputMode.LABEL) warmUpLabelOcr();
-                        toast("三种识别配置已保存并应用；重启后仍保持");
-                        dialog.dismiss();
-                    } catch (IllegalArgumentException invalid) {
-                        toast(invalid.getMessage());
-                    }
-                });
+            }
         });
-        dialog.show();
-        Window window = dialog.getWindow();
-        if (window != null) window.setLayout(dp(960), WindowManager.LayoutParams.MATCH_PARENT);
     }
 
     private void restartApplication() {
-        vlmOcrEngine.close();
-        labelOcrEngine.close();
+        recognitionController.closeEngines();
         Intent launch = getPackageManager().getLaunchIntentForPackage(getPackageName());
         if (launch == null) {
             toast("无法获取应用启动入口");
@@ -3840,328 +1306,41 @@ public final class MainActivity extends AppCompatActivity {
         overridePendingTransition(0, 0);
     }
 
-    private LinearLayout configPage() {
-        LinearLayout page = new LinearLayout(this);
-        page.setOrientation(LinearLayout.VERTICAL);
-        page.setPadding(dp(8), dp(8), dp(8), dp(18));
-        page.setVisibility(View.GONE);
-        return page;
-    }
-
-    private Button createConfigTab(String label) {
-        Button tab = new Button(this);
-        tab.setText(label);
-        tab.setAllCaps(false);
-        tab.setMinHeight(0);
-        tab.setMinWidth(0);
-        return tab;
-    }
-
-    private LinearLayout.LayoutParams weightedParams() {
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0,
-                LinearLayout.LayoutParams.MATCH_PARENT, 1f);
-        params.setMarginEnd(dp(4));
-        return params;
-    }
-
-    private void selectConfigPage(Button[] tabs, View[] pages, int selected) {
-        for (int index = 0; index < pages.length; index++) {
-            boolean active = index == selected;
-            pages[index].setVisibility(active ? View.VISIBLE : View.GONE);
-            tabs[index].setBackgroundResource(active
-                    ? R.drawable.button_primary : R.drawable.button_secondary);
-            tabs[index].setTextColor(ContextCompat.getColor(this,
-                    active ? R.color.eprint_paper : R.color.eprint_text));
-        }
-    }
-
-    private void addConfigSection(LinearLayout form, String title) {
-        TextView heading = new TextView(this);
-        heading.setText(title);
-        heading.setTextColor(ContextCompat.getColor(this, R.color.eprint_text));
-        heading.setTextSize(15f);
-        heading.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
-        heading.setPadding(0, dp(14), 0, dp(4));
-        form.addView(heading);
-    }
-
-    private CheckBox addConfigCheck(LinearLayout form, String label, boolean checked) {
-        CheckBox check = new CheckBox(this);
-        check.setText(label);
-        check.setChecked(checked);
-        check.setTextColor(ContextCompat.getColor(this, R.color.eprint_text));
-        check.setMinHeight(dp(42));
-        form.addView(check, new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-        return check;
-    }
-
-    private Spinner addModelSettingSpinner(LinearLayout form, String label,
-                                           String[] labels, int selection) {
-        TextView title = new TextView(this);
-        title.setText(label);
-        title.setTextColor(ContextCompat.getColor(this, R.color.eprint_muted));
-        title.setPadding(0, dp(8), 0, 0);
-        form.addView(title);
-        Spinner spinner = new Spinner(this);
-        ArrayAdapter<String> adapter = new ArrayAdapter<>(this,
-                android.R.layout.simple_spinner_item, labels);
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        spinner.setAdapter(adapter);
-        spinner.setSelection(Math.max(0, Math.min(labels.length - 1, selection)));
-        form.addView(spinner, new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(48)));
-        return spinner;
-    }
-
     private void showProfileSettings() {
-        LinearLayout form = new LinearLayout(this);
-        form.setOrientation(LinearLayout.VERTICAL);
-        form.setPadding(dp(20), dp(8), dp(20), dp(12));
-        DeviceCandidate target = printerService == null ? null : printerService.targetDevice();
-        if (target != null) selectedProfile = DeviceSettingsStore.apply(this, target, selectedProfile);
-        PrinterIdentity identity = target == null ? null
-                : DeviceCatalog.identify(target.name, target.transport);
-        TextView deviceInfo = new TextView(this);
-        String maker = identity == null ? selectedProfile.manufacturer : identity.manufacturer;
-        String type = identity == null ? selectedProfile.deviceType : identity.deviceType;
-        String specification = identity == null
-                ? selectedProfile.dpi + " DPI · " + selectedProfile.printableWidthDots
-                + " 点 / " + String.format(Locale.US, "%.1f", selectedProfile.printableWidthMm()) + " mm"
-                : identity.specification();
-        deviceInfo.setText("设备名称：" + (target == null ? "未选择设备" : target.name)
-                + "\n制造商：" + maker
-                + "\n设备类型：" + type
-                + "\n打印规格：" + specification
-                + "\n协议档案：" + selectedProfile.label);
-        deviceInfo.setTextColor(ContextCompat.getColor(this, R.color.eprint_text));
-        deviceInfo.setPadding(0, dp(6), 0, dp(8));
-        form.addView(deviceInfo);
+        ProfileSettingsDialog.show(this, printerService, selectedProfile,
+                new ProfileSettingsDialog.Listener() {
+                    @Override
+                    public void onWorkingProfileAdjusted(PrinterProfile profile) {
+                        selectedProfile = profile;
+                    }
 
-        boolean p1Config = selectedProfile.protocol == ProtocolType.DOTHAN_PRIVATE;
-        int densityMinimum = p1Config ? 1 : 0;
-        SeekBar density = addSettingSlider(form,
-                p1Config ? "打印浓度（P1 显示档位 1-15）" : "打印浓度（0-15）",
-                densityMinimum, 15, selectedProfile.printDensity);
-        SeekBar speed = addSettingSlider(form, "打印速度（1-14）",
-                1, 14, selectedProfile.printSpeed);
-        DothanJobOptions currentJob = loadDothanJobOptions();
-        CheckBox antiColor = new CheckBox(this);
-        antiColor.setText("反色打印（黑白互换）");
-        antiColor.setChecked(currentJob.antiColor);
-        antiColor.setPadding(0, dp(4), 0, dp(4));
-        form.addView(antiColor);
-        TextView paperTitle = new TextView(this);
-        paperTitle.setText("纸张类型");
-        paperTitle.setTextColor(ContextCompat.getColor(this, R.color.eprint_muted));
-        paperTitle.setPadding(0, dp(8), 0, 0);
-        form.addView(paperTitle);
-        Spinner paper = new Spinner(this);
-        ArrayAdapter<PaperType> paperAdapter = new ArrayAdapter<>(this,
-                android.R.layout.simple_spinner_item, PaperType.values());
-        paperAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        paper.setAdapter(paperAdapter);
-        paper.setSelection(selectedProfile.paperType.ordinal());
-        form.addView(paper);
-        EditText gap = addSettingField(form, "间隙长度（0.1 mm；30 表示 3.0 mm）",
-                selectedProfile.gapLengthTenthsMm, true);
-        CheckBox autoFeed = new CheckBox(this);
-        autoFeed.setText("打印后自动出纸");
-        autoFeed.setChecked(selectedProfile.autoFeed);
-        form.addView(autoFeed);
-        CheckBox beep = new CheckBox(this);
-        beep.setText("打印机提示音（需设备协议支持）");
-        beep.setChecked(selectedProfile.beep);
-        form.addView(beep);
-        EditText powerOff = addSettingField(form, "自动关机时间（分钟；0 表示关闭）",
-                selectedProfile.autoPowerOffMinutes, true);
+                    @Override
+                    public DothanJobOptions loadDothanJobOptions() {
+                        return MainActivity.this.loadDothanJobOptions();
+                    }
 
-        TextView protocolNote = new TextView(this);
-        protocolNote.setText("P1 会写入并回读确认浓度、速度、纸张/间隙、自动出纸、提示音和自动关机；"
-                + "TSPL 会在打印任务中下发浓度、速度、纸张/间隙；ESC/POS 会应用自动出纸。"
-                + "未验证协议的厂商扩展只离线保存，不会盲目发送。");
-        protocolNote.setTextColor(ContextCompat.getColor(this, R.color.eprint_muted));
-        protocolNote.setPadding(0, dp(8), 0, dp(8));
-        form.addView(protocolNote);
+                    @Override
+                    public void onCommonAntiColorSaved(boolean anti) {
+                        saveCommonAntiColor(anti);
+                    }
 
-        Button advancedToggle = new Button(this);
-        advancedToggle.setText("展开高级设置");
-        advancedToggle.setAllCaps(false);
-        advancedToggle.setBackgroundResource(R.drawable.button_secondary);
-        form.addView(advancedToggle, new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+                    @Override
+                    public void onDothanJobOptionsSaved(int copies, int leftTenthsMm, int rightTenthsMm,
+                                                        int topTenthsMm, int bottomTenthsMm,
+                                                        int direction, boolean flip, boolean anti) {
+                        saveDothanJobOptions(copies, leftTenthsMm, rightTenthsMm,
+                                topTenthsMm, bottomTenthsMm, direction, flip, anti);
+                    }
 
-        LinearLayout advanced = new LinearLayout(this);
-        advanced.setOrientation(LinearLayout.VERTICAL);
-        advanced.setVisibility(View.GONE);
-        form.addView(advanced);
-
-        Spinner compression = null;
-        CheckBox defaultAuth = null;
-        EditText helloToken = null;
-        EditText loginToken = null;
-        EditText motorMode = null;
-        EditText language = null;
-        CheckBox applyExtras = null;
-        EditText jobCopies = null;
-        EditText jobLeft = null;
-        EditText jobRight = null;
-        EditText jobTop = null;
-        EditText jobBottom = null;
-        Spinner jobDirection = null;
-        CheckBox jobFlip = null;
-        if (p1Config) {
-            TextView compressionTitle = new TextView(this);
-            compressionTitle.setText("德佟私有协议位图压缩");
-            compressionTitle.setTextColor(ContextCompat.getColor(this, R.color.eprint_muted));
-            compressionTitle.setPadding(0, dp(8), 0, 0);
-            advanced.addView(compressionTitle);
-            compression = new Spinner(this);
-            ArrayAdapter<DothanCompressionMode> compressionAdapter = new ArrayAdapter<>(this,
-                    android.R.layout.simple_spinner_item, DothanCompressionMode.values());
-            compressionAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-            compression.setAdapter(compressionAdapter);
-            compression.setSelection(selectedProfile.compression.ordinal());
-            advanced.addView(compression);
-            defaultAuth = new CheckBox(this);
-            defaultAuth.setText("无自定义令牌时使用内置离线授权（实验性，默认关闭）");
-            defaultAuth.setChecked(selectedProfile.useDefaultDothanAuth);
-            advanced.addView(defaultAuth);
-            helloToken = addSettingField(advanced, "自定义 helloToken（16 进制；留空表示不用自定义令牌）",
-                    selectedProfile.helloTokenHex, false);
-            loginToken = addSettingField(advanced, "loginToken（16 进制，4 字节）",
-                    selectedProfile.loginTokenHex, false);
-            motorMode = addSettingField(advanced, "电机模式（整数）",
-                    selectedProfile.motorMode, true);
-            language = addSettingField(advanced, "语言（整数）",
-                    selectedProfile.language, true);
-            applyExtras = new CheckBox(this);
-            applyExtras.setText("向设备下发电机模式和语言（实验性，默认仅离线保存）");
-            applyExtras.setChecked(selectedProfile.applyDothanExtras);
-            advanced.addView(applyExtras);
-
-            TextView jobTitle = new TextView(this);
-            jobTitle.setText("打印任务选项（份数 / 边距 / 方向 / 翻转，均待真机复验）");
-            jobTitle.setTextColor(ContextCompat.getColor(this, R.color.eprint_muted));
-            jobTitle.setPadding(0, dp(12), 0, 0);
-            advanced.addView(jobTitle);
-
-            jobCopies = addSettingField(advanced, "打印份数（1-20）", currentJob.copies, true);
-            jobLeft = addSettingField(advanced, "左边距（0.1 mm）",
-                    Math.round(currentJob.leftDots * 254f / selectedProfile.dpi), true);
-            jobRight = addSettingField(advanced, "右边距（0.1 mm）",
-                    Math.round(currentJob.rightDots * 254f / selectedProfile.dpi), true);
-            jobTop = addSettingField(advanced, "上边距（0.1 mm）",
-                    Math.round(currentJob.topDots * 254f / selectedProfile.dpi), true);
-            jobBottom = addSettingField(advanced, "下边距（0.1 mm）",
-                    Math.round(currentJob.bottomDots * 254f / selectedProfile.dpi), true);
-
-            TextView directionTitle = new TextView(this);
-            directionTitle.setText("旋转方向");
-            directionTitle.setTextColor(ContextCompat.getColor(this, R.color.eprint_muted));
-            directionTitle.setPadding(0, dp(8), 0, 0);
-            advanced.addView(directionTitle);
-            jobDirection = new Spinner(this);
-            ArrayAdapter<String> directionAdapter = new ArrayAdapter<>(this,
-                    android.R.layout.simple_spinner_item, new String[]{"正常", "旋转 180°"});
-            directionAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-            jobDirection.setAdapter(directionAdapter);
-            jobDirection.setSelection(currentJob.direction == 180 ? 1 : 0);
-            advanced.addView(jobDirection);
-
-            jobFlip = new CheckBox(this);
-            jobFlip.setText("水平翻转");
-            jobFlip.setChecked(currentJob.flipHorizontal);
-            advanced.addView(jobFlip);
-        }
-
-        EditText width = addSettingField(advanced, "最大可打印点宽", selectedProfile.printableWidthDots, true);
-        EditText spp = addSettingField(advanced, "SPP 分包字节", selectedProfile.sppChunkBytes, true);
-        EditText ble = addSettingField(advanced, "BLE 分包字节", selectedProfile.bleChunkBytes, true);
-        EditText usb = addSettingField(advanced, "USB Bulk 分包字节", selectedProfile.usbChunkBytes, true);
-        EditText delay = addSettingField(advanced, "分包间隔（毫秒）", selectedProfile.writeDelayMs, true);
-        EditText retries = addSettingField(advanced, "单包写入重试次数", selectedProfile.maxWriteRetries, true);
-        EditText threshold = addSettingField(advanced, "点阵黑白阈值（1-254）", selectedProfile.threshold, true);
-        EditText services = addSettingField(advanced, "首选 BLE Service UUID（逗号分隔）",
-                TextUtils.join(",\n", selectedProfile.preferredBleServiceStrings()), false);
-        EditText writes = addSettingField(advanced, "首选 BLE Write UUID（逗号分隔）",
-                TextUtils.join(",\n", selectedProfile.preferredBleWriteStrings()), false);
-        advancedToggle.setOnClickListener(view -> {
-            boolean visible = advanced.getVisibility() == View.VISIBLE;
-            advanced.setVisibility(visible ? View.GONE : View.VISIBLE);
-            advancedToggle.setText(visible ? "展开高级设置" : "收起高级设置");
-        });
-        Spinner compressionView = compression;
-        CheckBox defaultAuthView = defaultAuth;
-        EditText helloTokenView = helloToken;
-        EditText loginTokenView = loginToken;
-        EditText motorModeView = motorMode;
-        EditText languageView = language;
-        CheckBox applyExtrasView = applyExtras;
-        EditText jobCopiesView = jobCopies;
-        EditText jobLeftView = jobLeft;
-        EditText jobRightView = jobRight;
-        EditText jobTopView = jobTop;
-        EditText jobBottomView = jobBottom;
-        Spinner jobDirectionView = jobDirection;
-        CheckBox jobFlipView = jobFlip;
-        ScrollView scroll = new ScrollView(this);
-        scroll.addView(form);
-        AlertDialog dialog = new AlertDialog.Builder(this)
-                .setTitle("打印机配置与协议 · 离线保存")
-                .setView(scroll)
-                .setNegativeButton("取消", null)
-                .setPositiveButton("保存", null)
-                .create();
-        dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE)
-                .setOnClickListener(view -> {
-                    try {
-                        PrinterProfile customized = selectedProfile.withHardwareSettings(
-                                integerInRange(width, 128, 2400, "点宽"),
-                                integerInRange(spp, 64, 8192, "SPP 分包"),
-                                integerInRange(ble, 20, 512, "BLE 分包"),
-                                integerInRange(usb, 64, 65536, "USB 分包"),
-                                integerInRange(delay, 0, 500, "分包间隔"),
-                                integerInRange(retries, 0, 5, "重试次数"),
-                                integerInRange(threshold, 1, 254, "黑白阈值"),
-                                splitUuidInput(services.getText().toString()),
-                                splitUuidInput(writes.getText().toString()))
-                                .withDeviceSettings(maker, type,
-                                        densityMinimum + density.getProgress(),
-                                        1 + speed.getProgress(),
-                                        (PaperType) paper.getSelectedItem(),
-                                        integerInRange(gap, 0, 3000, "间隙长度"),
-                                        autoFeed.isChecked(), beep.isChecked(),
-                                        integerInRange(powerOff, 0, 1440, "自动关机时间"));
-                        PrinterProfile effectiveProfile = p1Config
-                                ? customized.withDothanOptions(
-                                        (DothanCompressionMode) compressionView.getSelectedItem(),
-                                        defaultAuthView.isChecked(),
-                                        helloTokenView.getText().toString().trim(),
-                                        loginTokenView.getText().toString().trim())
-                                .withDothanExtras(
-                                        integerInRange(motorModeView, 0, 255, "电机模式"),
-                                        integerInRange(languageView, 0, 255, "语言"),
-                                        applyExtrasView.isChecked())
-                                : customized;
-                        saveCommonAntiColor(antiColor.isChecked());
-                        if (p1Config) {
-                            saveDothanJobOptions(
-                                    integerInRange(jobCopiesView, 1, 20, "打印份数"),
-                                    integerInRange(jobLeftView, 0, 3000, "左边距"),
-                                    integerInRange(jobRightView, 0, 3000, "右边距"),
-                                    integerInRange(jobTopView, 0, 3000, "上边距"),
-                                    integerInRange(jobBottomView, 0, 3000, "下边距"),
-                                    jobDirectionView.getSelectedItemPosition() == 1 ? 180 : 0,
-                                    jobFlipView.isChecked(),
-                                    antiColor.isChecked());
-                        }
+                    @Override
+                    public void onProfileSaved(PrinterProfile effectiveProfile,
+                                               @Nullable DeviceCandidate target, AlertDialog dialog) {
                         selectedProfile = effectiveProfile;
                         if (target == null) {
-                            ProfileStore.save(this, effectiveProfile);
+                            ProfileStore.save(MainActivity.this, effectiveProfile);
                         } else {
-                            ProfileStore.saveHardwareOnly(this, effectiveProfile);
-                            DeviceSettingsStore.save(this, target, effectiveProfile);
+                            ProfileStore.saveHardwareOnly(MainActivity.this, effectiveProfile);
+                            DeviceSettingsStore.save(MainActivity.this, target, effectiveProfile);
                         }
                         document.dpi = effectiveProfile.dpi;
                         document.normalize();
@@ -4193,113 +1372,12 @@ public final class MainActivity extends AppCompatActivity {
                         } else {
                             toast("设备配置与协议参数已离线保存");
                         }
-                    } catch (IllegalArgumentException invalid) {
-                        toast(invalid.getMessage());
                     }
-                }));
-        dialog.show();
-    }
-
-    private SeekBar addSettingSlider(LinearLayout form, String label,
-                                     int minimum, int maximum, int value) {
-        LinearLayout header = new LinearLayout(this);
-        header.setGravity(android.view.Gravity.CENTER_VERTICAL);
-        header.setPadding(0, dp(8), 0, 0);
-        TextView title = new TextView(this);
-        title.setText(label);
-        title.setTextColor(ContextCompat.getColor(this, R.color.eprint_muted));
-        header.addView(title, new LinearLayout.LayoutParams(0,
-                LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-        TextView current = new TextView(this);
-        current.setTextColor(ContextCompat.getColor(this, R.color.eprint_text));
-        current.setTextSize(16);
-        current.setTypeface(current.getTypeface(), android.graphics.Typeface.BOLD);
-        header.addView(current);
-        form.addView(header);
-
-        SeekBar slider = new SeekBar(this);
-        slider.setMax(Math.max(0, maximum - minimum));
-        slider.setProgress(Math.max(0, Math.min(maximum, value) - minimum));
-        slider.setContentDescription(label);
-        current.setText(Integer.toString(minimum + slider.getProgress()));
-        slider.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            @Override
-            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                current.setText(Integer.toString(minimum + progress));
-            }
-
-            @Override public void onStartTrackingTouch(SeekBar seekBar) {}
-            @Override public void onStopTrackingTouch(SeekBar seekBar) {}
-        });
-        form.addView(slider, new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(44)));
-        return slider;
-    }
-
-    private EditText addSettingField(LinearLayout form, String label, int value, boolean numeric) {
-        return addSettingField(form, label, Integer.toString(value), numeric);
-    }
-
-    private EditText addDecimalSettingField(LinearLayout form, String label, float value) {
-        EditText input = addSettingField(form, label, Float.toString(value), true);
-        input.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
-        return input;
-    }
-
-    private EditText addSettingField(LinearLayout form, String label, String value, boolean numeric) {
-        TextView title = new TextView(this);
-        title.setText(label);
-        title.setTextColor(ContextCompat.getColor(this, R.color.eprint_muted));
-        title.setPadding(0, dp(8), 0, 0);
-        form.addView(title);
-        EditText input = new EditText(this);
-        input.setText(value);
-        input.setSelectAllOnFocus(true);
-        input.setInputType(numeric ? InputType.TYPE_CLASS_NUMBER
-                : InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
-        if (!numeric) input.setMinLines(2);
-        form.addView(input, new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-        return input;
-    }
-
-    private static int integerInRange(EditText input, int minimum, int maximum, String label) {
-        try {
-            int value = Integer.parseInt(input.getText().toString().trim());
-            if (value < minimum || value > maximum) throw new NumberFormatException();
-            return value;
-        } catch (NumberFormatException invalid) {
-            throw new IllegalArgumentException(label + "必须在 " + minimum + " 到 " + maximum + " 之间");
-        }
-    }
-
-    private static float floatInRange(EditText input, float minimum, float maximum, String label) {
-        try {
-            float value = Float.parseFloat(input.getText().toString().trim());
-            if (!Float.isFinite(value) || value < minimum || value > maximum) {
-                throw new NumberFormatException();
-            }
-            return value;
-        } catch (NumberFormatException invalid) {
-            throw new IllegalArgumentException(label + "必须在 " + minimum + " 到 " + maximum + " 之间");
-        }
-    }
-
-    private static String[] splitUuidInput(String value) {
-        String[] items = value.trim().split("[,\\s]+");
-        List<String> result = new ArrayList<>();
-        for (String item : items) if (!item.trim().isEmpty()) result.add(item.trim());
-        return result.toArray(new String[0]);
+                });
     }
 
     private void persistAndRedraw() {
-        document.normalize();
-        DocumentStore.save(this, workMode, document);
-        labelCanvas.invalidate();
-        updateCompatibilityWarning();
-        refreshBorderStyleButton();
-        refreshElementChips();
-        trackSnapshot();
+        elementEditorController.persistAndRedraw();
     }
 
     @Nullable
@@ -4349,10 +1427,11 @@ public final class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        if (barcodeScanner != null && embeddedCameraActive && !cameraSuspendedForProcessing
+        if (barcodeScanner != null && scannerController.embeddedCameraActive()
+                && !recognitionController.isCameraSuspendedForProcessing()
                 && ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
                 == PackageManager.PERMISSION_GRANTED) {
-            startEmbeddedScanner();
+            scannerController.startEmbeddedScanner();
         }
     }
 
@@ -4366,30 +1445,8 @@ public final class MainActivity extends AppCompatActivity {
     protected void onDestroy() {
         if (printerService != null) printerService.removeListener(hardwareListener);
         if (serviceBound) unbindService(hardwareServiceConnection);
-        vlmOcrEngine.requestStop();
-        ocrExecutor.shutdown();
-        labelOcrEngine.close();
-        vlmOcrEngine.close();
+        recognitionController.destroy();
         super.onDestroy();
     }
 
-    private static final class RankedPrinter {
-        final DeviceCandidate candidate;
-        final PrinterMatch match;
-        final PrinterProfile profile;
-
-        RankedPrinter(DeviceCandidate candidate, PrinterMatch match, PrinterProfile profile) {
-            this.candidate = candidate;
-            this.match = match;
-            this.profile = profile;
-        }
-    }
-
-    private abstract static class SimpleTextWatcher implements TextWatcher {
-        @Override
-        public void beforeTextChanged(CharSequence value, int start, int count, int after) {}
-
-        @Override
-        public void onTextChanged(CharSequence value, int start, int before, int count) {}
-    }
 }

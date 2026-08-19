@@ -23,7 +23,10 @@ public final class VlmSettings {
     static final String LEGACY_TRANSCRIBE_PROMPT = "Text Recognition:";
 
     public static final String[] BACKEND_VALUES = {"cpu", "opencl", "vulkan"};
-    public static final String[] BACKEND_LABELS = {"CPU（兼容优先）", "OpenCL GPU", "Vulkan GPU"};
+    // SM-X800（Adreno 730）+ MNN 3.6.1 实测：int4 量化的 GLM-OCR 在 GPU 后端显著慢于 CPU
+    // （详见 docs/refactor_gpu_opencv_0818.md benchmark），GPU 选项保留供其他设备尝试。
+    public static final String[] BACKEND_LABELS = {
+            "CPU（兼容优先，SM-X800 实测最快）", "OpenCL GPU（实测慢于 CPU）", "Vulkan GPU（实测慢于 CPU）"};
     public static final String[] PRECISION_VALUES = {"low", "normal", "high"};
     public static final String[] PRECISION_LABELS = {"低（FP16 优先）", "标准", "高"};
     public static final String[] MEMORY_VALUES = {"low", "normal", "high"};
@@ -71,12 +74,13 @@ public final class VlmSettings {
      * penalty/presence/frequency 只用于打破已在真机复现的重复 token 退化。
      * 视觉编码与 LLM 运行时必须同步完成：MNN 官方 llm_demo 同样在正式推理前关闭 async，
      * 否则独立 processor runtime 的视觉 embedding 可能尚未物化就进入解码。
+     * mllm 子块让视觉编码器跟随所选后端（官方 config.json 中该块独立存在，不随顶层覆盖）。
      */
     public String configJson() {
-        return "{\"backend_type\":\"" + backend + "\"," 
+        return "{\"backend_type\":\"" + backend + "\","
                 + "\"thread_num\":" + threadCount + ","
-                + "\"precision\":\"" + precision + "\"," 
-                + "\"memory\":\"" + memory + "\"," 
+                + "\"precision\":\"" + precision + "\","
+                + "\"memory\":\"" + memory + "\","
                 + "\"max_new_tokens\":" + maxNewTokens + ","
                 + "\"sampler_type\":\"penalty\","
                 + "\"penalty\":" + repetitionPenalty + ","
@@ -84,7 +88,17 @@ public final class VlmSettings {
                 + "\"presence_penalty\":" + presencePenalty + ","
                 + "\"frequency_penalty\":" + frequencyPenalty + ","
                 + "\"penalty_sampler\":\"greedy\","
-                + "\"async\":false}";
+                + "\"async\":false,"
+                + "\"mllm\":{\"backend_type\":\"" + backend + "\","
+                + "\"thread_num\":" + threadCount + ","
+                + "\"precision\":\"normal\","
+                + "\"memory\":\"low\"}}";
+    }
+
+    /** 仅替换推理后端的副本（其余参数原样保留），用于 GPU 加载失败后的 CPU 回退。 */
+    public VlmSettings withBackend(String newBackend) {
+        return new VlmSettings(newBackend, threadCount, precision, memory, maxNewTokens,
+                timeoutSeconds, repetitionPenalty, presencePenalty, frequencyPenalty, prompt);
     }
 
     public static int indexOf(String value, String[] values) {

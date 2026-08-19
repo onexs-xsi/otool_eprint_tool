@@ -12,9 +12,8 @@ android {
         applicationId 'com.otool.eprint'
         minSdk 24
         targetSdk 36
-        versionCode 23
-        versionName '1.5.17'
-
+        versionCode 32
+        versionName '1.5.26'
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
 
         // 目标机 SM-X800 为 arm64；onnxruntime / MNN native 库只打 arm64-v8a，控制包体。
@@ -65,6 +64,8 @@ dependencies {
     implementation 'com.journeyapps:zxing-android-embedded:4.3.0'
     implementation 'com.google.zxing:core:3.5.3'
     implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.22.0'
+    // OpenCV 官方 AAR（4.9+ 内置本地加载，无需 OpenCV Manager）：标签透视纠偏与码区候选检测。
+    implementation 'org.opencv:opencv:4.10.0'
 
     testImplementation 'junit:junit:4.13.2'
     testImplementation 'org.json:json:20240303'

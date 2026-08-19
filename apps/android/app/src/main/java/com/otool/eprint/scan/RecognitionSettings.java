@@ -6,10 +6,16 @@ public final class RecognitionSettings {
     public final boolean ppOcrEnabled;
     public final boolean vlmEnabled;
     public final boolean cropToLabel;
+    public final boolean perspectiveRectify;
     public final boolean maskCodesBeforeVlm;
     public final boolean experimentalWeakCodeMask;
     public final boolean showProcessingPreview;
-    public final boolean preferGlmOnConflict;
+    /**
+     * PP-OCR / GLM-OCR 融合权重档位（1~5）：
+     * 1=PP-OCR 为主（GLM 只补漏），2=PP 语义权重大，3=均衡按置信度，
+     * 4=GLM 语义权重大，5=GLM 为主（PP 只补漏）。
+     */
+    public final int fusionWeightLevel;
     public final int minimumLabelCoveragePercent;
     public final int blurVarianceThreshold;
 
@@ -31,9 +37,9 @@ public final class RecognitionSettings {
 
     public RecognitionSettings(
             boolean labelEnabled, boolean ppOcrEnabled, boolean vlmEnabled,
-            boolean cropToLabel, boolean maskCodesBeforeVlm,
+            boolean cropToLabel, boolean perspectiveRectify, boolean maskCodesBeforeVlm,
             boolean experimentalWeakCodeMask, boolean showProcessingPreview,
-            boolean preferGlmOnConflict, int minimumLabelCoveragePercent,
+            int fusionWeightLevel, int minimumLabelCoveragePercent,
             int blurVarianceThreshold, boolean qrEnabled, boolean qrContinuous,
             boolean qrTryHarder, boolean qrAlsoInverted, boolean qrExtendedFormats,
             boolean qrSuppressDuplicates, boolean barcodeEnabled,
@@ -45,10 +51,11 @@ public final class RecognitionSettings {
         this.ppOcrEnabled = ppOcrEnabled;
         this.vlmEnabled = vlmEnabled;
         this.cropToLabel = cropToLabel;
+        this.perspectiveRectify = perspectiveRectify;
         this.maskCodesBeforeVlm = maskCodesBeforeVlm;
         this.experimentalWeakCodeMask = experimentalWeakCodeMask;
         this.showProcessingPreview = showProcessingPreview;
-        this.preferGlmOnConflict = preferGlmOnConflict;
+        this.fusionWeightLevel = clamp(fusionWeightLevel, 1, 5);
         this.minimumLabelCoveragePercent = clamp(minimumLabelCoveragePercent, 10, 90);
         this.blurVarianceThreshold = clamp(blurVarianceThreshold, 10, 500);
         this.qrEnabled = qrEnabled;
@@ -68,8 +75,9 @@ public final class RecognitionSettings {
     }
 
     public static RecognitionSettings defaults() {
+        // 融合档位默认 5（GLM 为主），与旧版 preferGlmOnConflict=true 行为一致。
         return new RecognitionSettings(
-                true, true, true, true, false, false, true, true, 20, 60,
+                true, true, true, true, true, false, false, true, 5, 20, 60,
                 true, true, true, true, false, true,
                 true, true, true, true, true, true, true, true);
     }

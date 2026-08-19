@@ -43,6 +43,10 @@ public final class VlmOcrEngine {
     private long loadMs = -1;
     private volatile boolean stopRequested;
     private VlmSettings settings = VlmSettings.defaults();
+    /** 实际生效的推理后端；GPU 加载失败回退 CPU 后与 {@code settings.backend} 不同。 */
+    private String effectiveBackend;
+    /** GPU 后端加载失败、回退 CPU 时的原始失败原因；未发生回退为 null。 */
+    private String backendFallbackReason;
 
     /** 模型目录：{@code <外部私有目录>/models/glm-ocr-mnn}。 */
     public static File modelDir(Context context) {
@@ -87,6 +91,16 @@ public final class VlmOcrEngine {
         return loadMs;
     }
 
+    /** 实际生效的推理后端（可能因 GPU 失败回退而与配置不同）；未加载为 null。 */
+    public synchronized String effectiveBackend() {
+        return effectiveBackend;
+    }
+
+    /** GPU 回退 CPU 的原始失败原因；未发生回退为 null。 */
+    public synchronized String backendFallbackReason() {
+        return backendFallbackReason;
+    }
+
     public synchronized VlmSettings settings() {
         return settings;
     }
@@ -121,12 +135,34 @@ public final class VlmOcrEngine {
             session.load(new File(dir, "config.json").getAbsolutePath(), settings.configJson());
             session.setMaxNewTokens(settings.maxNewTokens);
             loadMs = System.currentTimeMillis() - start;
-            Log.i(TAG, "GLM-OCR loaded in " + loadMs + "ms; backend=" + settings.backend
+            effectiveBackend = settings.backend;
+            Log.i(TAG, "GLM-OCR loaded in " + loadMs + "ms; backend=" + effectiveBackend
                     + ", threads=" + settings.threadCount + ", maxTokens="
                     + settings.maxNewTokens);
         } catch (Throwable error) {
-            initError = "加载失败：" + error.getMessage();
-            Log.e(TAG, initError, error);
+            if ("cpu".equals(settings.backend)) {
+                initError = "加载失败：" + error.getMessage();
+                Log.e(TAG, initError, error);
+                return;
+            }
+            // GPU 后端失败不静默失败：释放残留会话，回退 CPU 重试并记录原始原因。
+            Log.w(TAG, "backend " + settings.backend + " 加载失败，回退 CPU 重试", error);
+            backendFallbackReason = settings.backend + ": " + error.getMessage();
+            session.release();
+            long cpuStart = System.currentTimeMillis();
+            try {
+                VlmSettings cpuSettings = settings.withBackend("cpu");
+                session.load(new File(dir, "config.json").getAbsolutePath(),
+                        cpuSettings.configJson());
+                session.setMaxNewTokens(cpuSettings.maxNewTokens);
+                settings = cpuSettings;
+                loadMs = System.currentTimeMillis() - cpuStart;
+                effectiveBackend = "cpu";
+                Log.i(TAG, "GLM-OCR CPU 回退加载成功，耗时 " + loadMs + "ms");
+            } catch (Throwable cpuError) {
+                initError = "加载失败（GPU 与 CPU 回退均失败）：" + cpuError.getMessage();
+                Log.e(TAG, initError, cpuError);
+            }
         }
     }
 

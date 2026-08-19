@@ -56,6 +56,32 @@ public final class VlmSettingsTest {
     }
 
     @Test
+    public void configJson_mllmFollowsBackendWithNormalPrecision() {
+        String json = new VlmSettings("vulkan", 6, "low", "low", 512, 90,
+                1.1f, 0.0f, 0.0f, "OCR:").configJson();
+        assertTrue(json.contains("\"mllm\":{"));
+        assertTrue(json.contains("\"mllm\":{\"backend_type\":\"vulkan\",\"thread_num\":6,"
+                + "\"precision\":\"normal\",\"memory\":\"low\"}"));
+    }
+
+    @Test
+    public void withBackend_onlyReplacesBackend() {
+        VlmSettings gpu = new VlmSettings("vulkan", 6, "normal", "high", 512, 90,
+                1.7f, 0.9f, 0.5f, "OCR:");
+        VlmSettings cpu = gpu.withBackend("cpu");
+        assertEquals("cpu", cpu.backend);
+        assertEquals(6, cpu.threadCount);
+        assertEquals("normal", cpu.precision);
+        assertEquals("high", cpu.memory);
+        assertEquals(512, cpu.maxNewTokens);
+        assertEquals(90, cpu.timeoutSeconds);
+        assertEquals(1.7f, cpu.repetitionPenalty, 0.001f);
+        assertEquals(0.9f, cpu.presencePenalty, 0.001f);
+        assertEquals(0.5f, cpu.frequencyPenalty, 0.001f);
+        assertEquals(gpu.prompt, cpu.prompt);
+    }
+
+    @Test
     public void legacyAndCustomPromptsCannotRemoveCompleteExtractionSchema() {
         assertEquals(VlmSettings.DEFAULT_PROMPT,
                 VlmSettings.completeExtractionPrompt("Text Recognition:"));

@@ -1,5 +1,6 @@
 package com.otool.eprint.scan;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
@@ -15,7 +16,8 @@ public final class RecognitionSettingsTest {
         assertTrue(settings.ppOcrEnabled);
         assertTrue(settings.vlmEnabled);
         assertTrue(settings.cropToLabel);
-        assertTrue(settings.preferGlmOnConflict);
+        assertTrue(settings.perspectiveRectify);
+        assertEquals(5, settings.fusionWeightLevel);
         assertFalse(settings.maskCodesBeforeVlm);
         assertFalse(settings.experimentalWeakCodeMask);
     }

@@ -20,6 +20,8 @@ import com.google.zxing.common.HybridBinarizer;
 import com.google.zxing.multi.GenericMultipleBarcodeReader;
 import com.google.zxing.multi.qrcode.detector.MultiDetector;
 
+import com.otool.eprint.scan.opencv.OpenCVBarcodeRegionFinder;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.EnumMap;
@@ -135,14 +137,32 @@ public final class BarcodeMasker {
         }
         int beforeStripes = regions.size();
         if (experimentalWeakCodeMask) {
-            for (MaskBounds stripeRegion : findStripeRegions(luminance, width, height)) {
-                addBounds(regions, stripeRegion);
+            // OpenCV 梯度 + 闭运算实现优先；返回 null（不可用/失败）时回退纯 Java 实现。
+            List<float[]> openCvStripes =
+                    OpenCVBarcodeRegionFinder.findStripeRegions(bitmap);
+            if (openCvStripes != null) {
+                for (float[] stripe : openCvStripes) {
+                    addBounds(regions, new MaskBounds(stripe[0], stripe[1],
+                            stripe[2], stripe[3]));
+                }
+            } else {
+                for (MaskBounds stripeRegion : findStripeRegions(luminance, width, height)) {
+                    addBounds(regions, stripeRegion);
+                }
             }
         }
         int stripeCount = regions.size() - beforeStripes;
         int beforeMatrix = regions.size();
-        for (MaskBounds matrixRegion : findMatrixRegions(luminance, width, height)) {
-            addBounds(regions, matrixRegion);
+        List<float[]> openCvMatrix = OpenCVBarcodeRegionFinder.findMatrixRegions(bitmap);
+        if (openCvMatrix != null) {
+            for (float[] matrix : openCvMatrix) {
+                addBounds(regions, new MaskBounds(matrix[0], matrix[1],
+                        matrix[2], matrix[3]));
+            }
+        } else {
+            for (MaskBounds matrixRegion : findMatrixRegions(luminance, width, height)) {
+                addBounds(regions, matrixRegion);
+            }
         }
         Log.i(TAG, "detected regions: decoded=" + decodedCount + ", qrFinder="
                 + finderCount + ", stripe=" + stripeCount + ", matrix="
