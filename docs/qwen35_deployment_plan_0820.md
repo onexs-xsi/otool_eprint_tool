@@ -1,10 +1,15 @@
-# Qwen3.5 离线结构化补全部署计划
+# Qwen3.5 离线结构化补全（MNN text-only）部署计划
 
 日期：2026-08-20
 
 基线：EPrint v1.5.35 / versionCode 41
 
-状态：仅完成方案设计，尚未下载、转换、推送、加载或部署 Qwen3.5，也未修改应用业务代码
+状态：已确定部署 `Qwen3.5-2B-MNN` 的 text-only 运行模式；尚未下载、转换、推送、加载或部署 Qwen3.5，也未修改应用业务代码
+
+本计划的 text-only 定义：Qwen3.5 只接收 PP-OCR/规则生成的普通文本请求，不接收图片，不生成
+`<img>...</img>` prompt，不进入 MNN 多模态 prompt 分支；每次生成的 `vision_time` 必须为 0。
+官方完整模型快照仍保留视觉相关文件，以避免破坏模型完整性；“不执行视觉编码器”与“加载时是否
+仍映射视觉权重”分开验收，不能通过删除文件或伪造 `is_visual=false` 规避。
 
 ## 1. 结论先行
 
@@ -22,7 +27,8 @@ flowchart LR
     E --> H{仍有缺失或歧义?}
     G --> H
     H -- 否 --> K[最终 ComponentRecord]
-    H -- 是 --> I[Qwen3.5 文本补全]
+    H -- 是 --> I[Qwen3.5-2B-MNN
+    text-only 文本补全]
     I --> J[严格 JSON + 证据 + 目录校验]
     J -- 通过: 只补空字段 --> K
     J -- 拒绝/超时 --> K
@@ -35,11 +41,16 @@ flowchart LR
    Qwen3.5 的前置依赖。
 2. Qwen3.5 默认只填空字段，不覆盖已有且通过规则验证的值；输出失败、超时或模型缺失时，
    原 PP-OCR/规则结果照常生成模板。
-3. 首轮验证使用官方 4-bit `Qwen3.5-2B-MNN`；`0.8B` 作为性能下限，`4B` 作为质量上限。
-   最终型号由同一测试集决定，不凭参数量直接定型。
-4. 延续项目的离线边界：模型不打进 APK、不增加 `INTERNET` 权限，通过离线导入或 ADB
+3. 首期部署型号确定为官方 4-bit `Qwen3.5-2B-MNN`；`0.8B` 仅作性能下限，`4B` 仅作质量
+   对照，不在本决定中替换 2B。
+4. 首期强制使用 text-only 推理：Qwen 请求只能包含结构化文本，禁止图片路径、`<img>` 标签、
+   视觉 token 和多模态 API；native 结果中的 `vision_time` 必须为 0。
+5. 保留官方 Qwen3.5-2B-MNN 完整快照，包括视觉文件；是否在 `load()` 阶段映射视觉权重必须
+   通过 PSS、日志和运行时指标确认。若 MNN 3.6.1 不能在加载阶段跳过视觉权重，则停止“零视觉
+   加载”目标，评估官方 text-only 导出或受控升级 MNN，不能自行改 `is_visual`。
+6. 延续项目的离线边界：模型不打进 APK、不增加 `INTERNET` 权限，通过离线导入或 ADB
    放入应用私有模型目录。
-5. 首期不同时常驻 GLM-OCR 与 Qwen3.5。两个大模型并存会放大内存峰值，应由统一模型资源
+7. 首期不同时常驻 GLM-OCR 与 Qwen3.5。两个大模型并存会放大内存峰值，应由统一模型资源
    协调器串行装载，或通过识别预设让用户二选一。
 
 ## 2. 当前代码基线与可复用能力
@@ -89,9 +100,14 @@ flowchart LR
   2.85 GB。来源：[Qwen3.5-0.8B-MNN](https://huggingface.co/taobao-mnn/Qwen3.5-0.8B-MNN)、
   [Qwen3.5-2B-MNN](https://huggingface.co/taobao-mnn/Qwen3.5-2B-MNN)、
   [Qwen3.5-4B-MNN](https://huggingface.co/taobao-mnn/Qwen3.5-4B-MNN)。
-- 官方 Qwen3.5-MNN 的 `llm_config.json` 仍声明 `is_visual: true`。即使本项目首期只提交
-  文本，也不应自行删除 `visual.mnn`/`visual.mnn.weight`；必须以完整官方快照先通过兼容性
-  验证。来源：[2B MNN 配置](https://huggingface.co/taobao-mnn/Qwen3.5-2B-MNN/blob/main/llm_config.json)。
+- 官方 Qwen3.5-MNN 的 `llm_config.json` 仍声明 `is_visual: true`。因此本项目必须保留
+  `visual.mnn`/`visual.mnn.weight`，但运行时不得向 prompt 注入图片；不能把 vLLM 的
+  `--language-model-only` 参数直接当成 MNN 配置项。来源：[2B MNN 配置](https://huggingface.co/taobao-mnn/Qwen3.5-2B-MNN/blob/main/llm_config.json)、
+  [Qwen3.5-2B 官方模型卡](https://huggingface.co/Qwen/Qwen3.5-2B)。
+- MNN 官方文档区分普通文本模型与视觉模型：普通文本路径使用 `is_visual: false`，视觉路径
+  才配置 `visual_model` 并使用 `<img>` 输入；本项目的 Qwen3.5 包是视觉配置，所以首期只
+  采用“普通文本 API 路径 + 禁止视觉输入”，是否能进一步跳过加载视觉权重必须单独验证。
+  来源：[MNN-LLM 官方文档](https://github.com/alibaba/MNN/blob/master/transformers/README.md)。
 - MNN 文档支持通过 `config.json` 控制后端、线程、精度、采样，并由模型的 Jinja chat
   template 生成对话格式。来源：[MNN-LLM 官方文档](https://mnn-docs.readthedocs.io/en/latest/transformers/llm.html)。
 
@@ -110,15 +126,23 @@ SM-X800 上的真实加载测试。官方仓库历史中出现过 Qwen3.5 Androi
 不首选 9B 及更大模型：当前目标只是短文本分类、字段归属和受约束补全，模型体积、冷加载、
 内存峰值和端侧时延成本与任务不匹配。
 
-### 3.3 首期输入模式
+### 3.3 首期运行模式：强制 text-only
 
-虽然 Qwen3.5 原生支持图像，首期固定为 **text-only**：
+虽然 Qwen3.5 原生支持图像，首期固定为 **text-only**，并把“跳过视觉编码器执行”作为硬性
+验收条件：
 
 - 输入 PP-OCR 逐行文本、每行置信度和位置；
 - 输入确定性解析出的现有字段；
 - 输入缺失字段列表；
 - 仅输入立创目录检索后的少量候选，不把 1.38 MB 全目录塞进 prompt；
 - GLM 开启时，可把其全文转写作为第二份文字证据，但不传标签图片给 Qwen。
+- Qwen prompt 只能是普通 UTF-8 文本；禁止写入图片路径、`<img>`、`<hw>`、视觉 token 或
+  任何多模态 content 数组；
+- `QwenCompletionEngine` 必须调用 MNN 普通文本 `response(history_, ...)` 路径，不调用
+  `response(multimodal_prompt, ...)`；
+- 每次 native 结果 `vision_time == 0`，且应用不生成 Qwen 专用图片文件；
+- `load()` 阶段单独记录是否加载视觉权重。若视觉权重仍被映射，只能称为“text-only 推理”，
+  不得在文档或 UI 中宣称“视觉权重未加载”。
 
 这样才能准确测出“LLM 补全”本身的收益，并保证 `PP-OCR + Qwen3.5` 是完整可用组合。
 Qwen 直接读图作为后续独立实验，不进入首期发布范围。
@@ -226,6 +250,10 @@ Qwen3.5 默认思考，首期在官方 chat template 上设置 `enable_thinking=
 MNN 当前链路未在本项目中证明具备 JSON grammar constrained decoding，因此所有模型输出都
 必须当作不可信文本处理。
 
+text-only 额外约束：Qwen 的 prompt 构造器不得复用 GLM 的图片落盘、补方或 `<img>` 拼接逻辑；
+native 层必须走普通文本 `response(history_, ...)` 分支。若输出指标出现非零 `vision_time`，
+该次请求视为 text-only 验收失败并回退，不得把结果写入最终记录。
+
 ## 6. 安全落地规则
 
 新增 `QwenCompletionValidator`，按字段执行以下规则；校验失败只拒绝该补丁，不丢弃基线记录：
@@ -260,14 +288,16 @@ MNN 当前链路未在本项目中证明具备 JSON grammar constrained decoding
 | `src/main/cpp/mnn_llm_jni.cpp` | 将 `glm_ocr_jni.cpp` 的模型无关部分改为通用 JNI；保留流式 UTF-8、安全停止和性能数据 |
 | `CMakeLists.txt` | JNI 库改为中性名称；迁移期可保留 GLM adapter，避免一次性重写全部调用方 |
 
-先做“兼容 adapter”而不是大爆炸重命名：GLM 与 Qwen 均依赖同一通用会话，GLM 专属的图片
-prompt 和退化检测继续留在 `VlmOcrEngine`。
+先做“兼容 adapter”而不是大爆炸重命名：GLM 与 Qwen 均依赖同一通用会话。GLM 专属的图片
+prompt、视觉输入和退化检测继续留在 `VlmOcrEngine`；Qwen adapter 禁止引入图片处理和
+多模态 prompt。
 
 ### 7.2 Qwen 补全域
 
 建议新增 `scan/qwen/`：
 
-- `QwenCompletionEngine`：模型清单、装载、生成、超时、停止和性能统计；只接收文本请求。
+- `QwenCompletionEngine`：模型清单、装载、生成、超时、停止和性能统计；只接收文本请求，
+  并校验 native `vision_time == 0`。
 - `QwenCompletionSettings` / `Store`：模型档位、超时、最大 token、开关；与 `VlmSettings`
   分离，避免 GLM prompt/采样迁移污染 Qwen。
 - `QwenCompletionRequest` / `Builder`：构造受限请求和 prompt。
@@ -306,11 +336,14 @@ prompt 和退化检测继续留在 `VlmOcrEngine`。
    ├─ llm.mnn.json
    ├─ llm.mnn.weight
    ├─ tokenizer.txt
+   # 以下两个文件必须保留在官方完整快照中，但 text-only 运行不得调用视觉路径
    ├─ visual.mnn
    └─ visual.mnn.weight
 ```
 
-实际必需文件以固定 revision 的官方快照为准，不能复制 GLM 的必需文件数组。
+实际必需文件以固定 revision 的官方快照为准，不能复制 GLM 的必需文件数组。第一版不因
+text-only 运行而删除视觉文件，也不把 `llm_config.json` 中的 `is_visual` 强行改成 `false`；
+这些动作只有在官方 text-only 导出或升级后的 MNN 运行时明确支持、并通过完整回归后才可评估。
 
 `model_manifest.json` 至少记录：
 
@@ -319,7 +352,12 @@ prompt 和退化检测继续留在 `VlmOcrEngine`。
 - `quantization`: 4-bit、来源模型和许可证；
 - 每个文件的路径、字节数和 SHA-256；
 - 兼容的 MNN 版本、应用 schema 版本和创建时间；
-- 本项目的验证设备与结果摘要。
+- 本项目的验证设备与结果摘要；
+- `input_mode`: `text-only`；
+- `vision_input`: `forbidden`；
+- `multimodal_prompt`: `disabled`；
+- `require_vision_time_us`: `0`；
+- `visual_weights_load_policy`: `measure_and_report`（不得未经实测宣称未加载）。
 
 ### 8.2 交付方式
 
@@ -341,8 +379,11 @@ prompt 和退化检测继续留在 `VlmOcrEngine`。
    就禁止该预设，而不是冒险触发 LMK。
 5. 只有检测到目标字段缺失/歧义时才调用 Qwen；字段完整时不付出生成成本。
 6. 页面退出、配置变化、内存压力和 `onDestroy` 均要可停止并释放当前会话。
-7. 每次识别记录 Java heap、native PSS、模型加载时间、prefill/decode 和总耗时；发布版日志不
-   输出完整标签内容。
+7. 每次识别记录 Java heap、native PSS、模型加载时间、prefill/decode、`vision_time` 和总耗时；
+   发布版日志不输出完整标签内容。
+8. 分别记录 `load()` 阶段与 `response()` 阶段的 native PSS、文件映射和 MNN 日志：
+   `vision_time == 0` 只能证明未执行视觉编码；只有 load 阶段也没有视觉权重映射时，才可将
+   “跳过视觉编码器”扩展表述为“视觉权重未加载”。
 
 ## 10. 分阶段实施计划
 
@@ -358,15 +399,22 @@ prompt 和退化检测继续留在 `VlmOcrEngine`。
 
 ### 阶段 1：运行时兼容性冒烟，不接业务
 
-- 固定下载官方 Qwen3.5-0.8B/2B/4B-MNN revision 并生成 SHA-256 清单。
-- 用当前 APK 内 MNN 3.6.1 库加载 2B，完成纯文本、中文、非思考、短 JSON、连续 20 次重置/
-  生成和中止测试。
+- 固定下载官方 `Qwen3.5-2B-MNN` revision 并生成 SHA-256 清单；0.8B/4B 只作为后续对照，
+  不改变首期部署型号。
+- 用当前 APK 内 MNN 3.6.1 库加载 2B，使用不含 `<img>` 的普通文本 prompt，完成中文、非思考、
+  短 JSON、连续 20 次重置/生成和中止测试。
+- 在 native 日志和 JNI 结果中确认每次请求走普通文本 `response(history_, ...)`，没有进入
+  `response(multimodal_prompt, ...)`，并且 `vision_time == 0`。
+- 记录模型 `load()` 前后 native PSS、视觉文件映射、`load()` 日志和首次生成指标；若视觉权重
+  仍在加载阶段被映射，明确记录为“文本推理但视觉权重仍加载”，不得伪称完全 text-only。
 - 验证 chat template、`enable_thinking=false`、结束 token、UTF-8 流式回调和 `max_new_tokens`。
-- 测量三档模型的冷加载、峰值 PSS、prefill/decode、温度、崩溃和卸载后内存回落。
-- 若当前预编译 MNN 不兼容，单独评估升级官方 MNN；不得用捕获崩溃或忽略模板错误的方式
-  绕过。
+- 测量 2B 的冷加载、峰值 PSS、prefill/decode、`vision_time`、崩溃和卸载后内存回落。
+- 若当前预编译 MNN 不支持 Qwen3.5 text-only 普通文本路径，或无法证明视觉路径未被调用，
+  单独评估升级官方 MNN/官方 text-only 导出；不得用删除视觉文件、伪造 `is_visual=false`、
+  捕获崩溃或忽略模板错误的方式绕过。
 
-通过条件：2B 连续 20 次无崩溃、能稳定输出合法 UTF-8、超时可停止、释放后内存可复用。
+通过条件：2B 连续 20 次无崩溃、能稳定输出合法 UTF-8、超时可停止、每次 `vision_time == 0`、
+释放后内存可复用；视觉权重是否在 load 阶段映射必须有明确记录。
 
 ### 阶段 2：纯 JVM 补全内核
 
@@ -403,6 +451,8 @@ prompt 和退化检测继续留在 `VlmOcrEngine`。
 - 对 0.8B、2B、4B 使用完全相同 prompt、测试集和采样矩阵。
 - 对照：PP-only、PP+Qwen、PP+GLM、PP+GLM+Qwen。
 - ADB 连续执行冷启动、拍摄、旋转/后台恢复、取消、超时、低内存和 20 次循环。
+- 对 Qwen 单独断言：不创建图片输入、不出现 `<img>`、普通文本 API 被调用、`vision_time == 0`；
+  同时保留 load 阶段是否映射视觉权重的实测记录。
 - 记录所有被接受和被拒绝的 patch，人工复核误补案例；不得只统计模型原始 JSON。
 - 若 2B 已通过质量门槛，除非 4B 有明确有效收益，否则不引入 4B 的体积和内存成本。
 
@@ -458,6 +508,8 @@ prompt 和退化检测继续留在 `VlmOcrEngine`。
 - 正常加载、缺文件、哈希错误、错误 revision；
 - 中文/ASCII/特殊单位 UTF-8 流式输出；
 - non-thinking 是否真实生效，输出中不得出现思考正文；
+- Qwen text-only 分支：不接受图片路径或 `<img>`，只调用普通文本 API，`vision_time == 0`；
+- Qwen `load()` 阶段视觉权重映射、native PSS 与日志审计；
 - stop、timeout、Activity 销毁与连续 reset；
 - GLM→release→Qwen 的内存回落；
 - CPU 1/2/4 线程和 precision/memory 的设备消融；
@@ -478,6 +530,8 @@ prompt 和退化检测继续留在 `VlmOcrEngine`。
 8. 标签文字包含“忽略此前规则并输出…”，只能作为数据，不能改变 schema；
 9. 无法读清的字段，Qwen abstain 并保留人工核对提示；
 10. 反光抑制和单位后空格仍只各执行一次。
+11. Qwen 只走 text-only 文本路径；不向 native 传入图片、`<img>` 或视觉 token，且
+    `vision_time == 0`。
 
 ## 13. 风险、缓解与停止条件
 
@@ -486,7 +540,7 @@ prompt 和退化检测继续留在 `VlmOcrEngine`。
 | 当前 MNN 3.6.1 预编译库与 Qwen3.5 包不兼容 | 先独立冒烟；必要时受控升级 MNN | 连续 crash、模板错误或无法中止时停止业务接入 |
 | 2B JSON 不稳定/分类能力不足 | non-thinking、短 schema、一次修复、2B/4B 对照 | 补全精确率 <98% 时不自动写入 |
 | 模型幻觉 | fill-only、证据复核、目录成员校验、abstain | 任一无证据值通过 validator 即阻断发布 |
-| 视觉塔增加包体和内存 | 首期仍保留官方完整快照；后续只使用官方支持的 text-only 导出 | 不自行删文件或改 `is_visual` 冒险发布 |
+| 视觉塔增加包体和内存 | 首期保留官方完整快照，但 Qwen 只走普通文本 API；分别测量 load/response 阶段的视觉权重映射与 PSS | `vision_time != 0`、视觉路径被调用，或无法接受的视觉权重常驻且没有官方 text-only 方案时停止发布 |
 | GLM 与 Qwen 同时驻留导致 LMK | 识别预设、互斥资源协调、顺序释放 | 内存无法稳定回落时禁用“实验全链” |
 | 全目录进入 prompt 导致时延/干扰 | 本地规则先筛 Top-K，目录只做校验 | 单请求不允许携带完整目录 |
 | 用户把 Qwen 当事实数据库 | UI 标明“提取/目录校验/推断”，推断默认关闭 | 无离线器件事实库时不允许凭常识补电气参数 |
@@ -495,6 +549,7 @@ prompt 和退化检测继续留在 `VlmOcrEngine`。
 ## 14. 明确不在首期范围内
 
 - 不让 Qwen3.5 直接替代 PP-OCR 或 GLM-OCR 读图；
+- 不向 Qwen3.5 传图片、`<img>`、视觉 token 或多模态 content；不调用视觉编码器推理路径；
 - 不联网查询立创商品详情、价格、库存或数据手册；
 - 不把模型权重打进 APK，也不在 App 内在线下载；
 - 不训练/微调 LoRA，先验证原始官方 instruct 模型与严格校验链路；
@@ -507,6 +562,8 @@ prompt 和退化检测继续留在 `VlmOcrEngine`。
 - [ ] 基准数据集和字段 GT 已冻结
 - [ ] 官方模型 id、revision、许可证和 SHA-256 已记录
 - [ ] 当前 MNN 二进制在目标机通过 Qwen3.5 2B 连续冒烟
+- [ ] Qwen3.5 2B 只走普通文本 API，`vision_time == 0` 且未生成图片输入
+- [ ] load 阶段是否映射视觉权重已有 native PSS/日志证据；若仍加载，文档和 UI 未宣称“视觉权重未加载”
 - [ ] non-thinking 与结束 token 行为已验证
 - [ ] fill-only、证据校验、目录校验已用纯 JVM 测试锁定
 - [ ] 模型资源互斥策略已验证不会触发 LMK
