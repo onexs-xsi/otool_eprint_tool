@@ -594,9 +594,8 @@ public final class MainActivity extends AppCompatActivity {
         refreshProfileSummary();
         elementEditorController.refreshElementChips();
 
-        TextElement initial = document.elements.isEmpty() ? null : document.elements.get(0);
-        if (initial != null) labelCanvas.select(initial.id);
-        showSelectedElement(initial);
+        // 默认不选中任何元素：编辑面板与选择框只在用户点按元素后出现。
+        showSelectedElement(null);
 
         Intent serviceIntent = new Intent(this, PrinterConnectionService.class);
         bindService(serviceIntent, hardwareServiceConnection, Context.BIND_AUTO_CREATE);
@@ -786,9 +785,7 @@ public final class MainActivity extends AppCompatActivity {
         document.normalize();
         elementEditorController.resetHistory();
         labelCanvas.setDocument(document);
-        TextElement first = document.elements.isEmpty() ? null : document.elements.get(0);
-        labelCanvas.select(first == null ? null : first.id);
-        showSelectedElement(first);
+        showSelectedElement(null);
         refreshDocumentControls();
         renderWorkMode();
         persistAndRedraw();
@@ -909,9 +906,7 @@ public final class MainActivity extends AppCompatActivity {
                     templateController.templateBoldHeadline(),
                     templateController.templateLargeFont(), templateController.templateFields());
             labelCanvas.setDocument(document);
-            TextElement first = document.elements.isEmpty() ? null : document.elements.get(0);
-            labelCanvas.select(first == null ? null : first.id);
-            showSelectedElement(first);
+            showSelectedElement(null);
         } else {
             document.widthMm = width;
             document.heightMm = height;

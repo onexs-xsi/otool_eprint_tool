@@ -75,8 +75,9 @@ public final class LabelCanvasView extends View {
 
     public void setDocument(LabelDocument document) {
         this.document = document;
+        // 不默认选中任何元素：选择框只在用户点按后出现。
         if (document.find(selectedId) == null) {
-            selectedId = document.elements.isEmpty() ? null : document.elements.get(0).id;
+            selectedId = null;
         }
         invalidate();
     }
@@ -517,11 +518,34 @@ public final class LabelCanvasView extends View {
     private void calculateElementBounds(TextElement element, RectF out) {
         float left = pageBounds.left + element.xMm * pixelsPerMm;
         float top = pageBounds.top + element.yMm * pixelsPerMm;
-        float width = Math.max(1f, element.widthMm * pixelsPerMm);
+        float boxWidth = Math.max(1f, element.widthMm * pixelsPerMm);
+        float width = boxWidth;
         float height = Math.max(1f, element.heightMm * pixelsPerMm);
         if (TextElement.TYPE_LINE.equals(element.type)) {
             if ("v".equals(element.format)) width = Math.max(dp(8), element.lineWidthMm * pixelsPerMm);
             else height = Math.max(dp(8), element.lineWidthMm * pixelsPerMm);
+        } else if (element.isTextual() && !element.isBoxed()) {
+            // 文本元素：选择框贴合实测文字宽高，而不是元素盒（heightMm 默认 8mm 等）。
+            textPaint.setTextSize(Math.max(dp(7), element.fontSizePt * 25.4f / 72f * pixelsPerMm));
+            textPaint.setFakeBoldText(element.bold);
+            String content = element.displayText();
+            StaticLayout layout = StaticLayout.Builder.obtain(content, 0, content.length(),
+                            textPaint, Math.max(1, Math.round(boxWidth)))
+                    .setAlignment(toAlignment(element.alignment))
+                    .setIncludePad(false)
+                    .build();
+            float textWidth = 0f;
+            for (int line = 0; line < layout.getLineCount(); line++) {
+                textWidth = Math.max(textWidth, layout.getLineWidth(line));
+            }
+            width = Math.max(1f, Math.min(boxWidth, textWidth));
+            height = Math.max(1f, Math.min(height, (float) layout.getHeight()));
+            // 右对齐文本贴盒右缘，居中贴盒中线，与绘制位置一致。
+            if (element.alignment == TextElement.ALIGN_RIGHT) {
+                left += boxWidth - width;
+            } else if (element.alignment == TextElement.ALIGN_CENTER) {
+                left += (boxWidth - width) / 2f;
+            }
         }
         out.set(left, top, left + width, top + height);
     }

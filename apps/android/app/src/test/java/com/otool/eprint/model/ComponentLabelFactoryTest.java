@@ -34,7 +34,7 @@ public class ComponentLabelFactoryTest {
     private static float estimatedWidthMm(TextElement element) {
         float emUnits = 0f;
         for (int index = 0; index < element.text.length(); index++) {
-            emUnits += element.text.charAt(index) > 0x2E7F ? 1f : 0.55f;
+            emUnits += element.text.charAt(index) > 0x2E7F ? 1f : 0.6f;
         }
         return emUnits * element.fontSizePt * 25.4f / 72f;
     }
@@ -52,12 +52,29 @@ public class ComponentLabelFactoryTest {
     private static void assertValueRowsDoNotOverlap(LabelDocument document) {
         float previousBottom = -1f;
         for (TextElement element : document.elements) {
+            if (!TextElement.TYPE_TEXT.equals(element.type)) continue;
             if (element.id.endsWith("_prefix")) continue;
             assertTrue("元素 " + element.id + " 与上一行重叠",
                     element.yMm >= previousBottom - 0.01f);
             previousBottom = element.yMm + element.fontSizePt * 25.4f / 72f;
         }
         assertTrue(previousBottom <= document.heightMm + 0.01f);
+    }
+
+    private static int countTextElements(LabelDocument document) {
+        int count = 0;
+        for (TextElement element : document.elements) {
+            if (TextElement.TYPE_TEXT.equals(element.type)) count++;
+        }
+        return count;
+    }
+
+    private static int countLineElements(LabelDocument document) {
+        int count = 0;
+        for (TextElement element : document.elements) {
+            if (TextElement.TYPE_LINE.equals(element.type)) count++;
+        }
+        return count;
     }
 
     private static String allText(LabelDocument document) {
@@ -72,19 +89,24 @@ public class ComponentLabelFactoryTest {
         assertNotNull(label);
         assertNotNull(value);
         assertEquals(prefix, label.text);
-        assertEquals(0.4f, label.xMm, 0.001f);
-        assertEquals(4.1f, label.widthMm, 0.001f);
+        // 结构断言：前缀列从左边距起、值列紧跟其后（间隙 0.15mm）、右抵右边距
+        assertEquals(0.3f, label.xMm, 0.001f);
+        assertTrue(label.widthMm >= 3.0f);
+        assertTrue(label.widthMm <= 5.0f);
         assertEquals(TextElement.ALIGN_RIGHT, label.alignment);
-        assertEquals(4.7f, value.xMm, 0.001f);
-        assertEquals(19.9f, value.widthMm, 0.001f);
+        assertEquals(label.xMm + label.widthMm + 0.15f, value.xMm, 0.001f);
+        assertEquals(document.widthMm - value.xMm - 0.3f, value.widthMm, 0.001f);
         assertEquals(label.yMm, value.yMm, 0.001f);
+        // 元素高度为真实行高（不再是默认 8mm），供预览裁切与选择框贴字使用
+        assertTrue(label.heightMm > 0f && label.heightMm < 8f);
+        assertEquals(label.heightMm, value.heightMm, 0.001f);
     }
 
     @Test
     public void compactUsesFourFixedPrefixesAndNeverIncludesLcscNumber() {
         LabelDocument document = ComponentLabelFactory.create(mlccRecord(), 203, 25f, 15f,
                 ComponentTemplate.COMPACT, true, true, false);
-        assertEquals(8, document.elements.size());
+        assertEquals(8, countTextElements(document));
         assertFixedPrefix(document, "component_model", "型号:");
         assertFixedPrefix(document, "component_category", "品类:");
         assertFixedPrefix(document, "component_spec", "规格:");
@@ -92,6 +114,52 @@ public class ComponentLabelFactoryTest {
         assertEquals("CGA0402C0G120J500GT", document.find("component_model").text);
         assertFalse(allText(document).contains("C45359894"));
         assertNull(document.find("component_supplier_prefix"));
+        assertSingleLineFits(document);
+        assertValueRowsDoNotOverlap(document);
+    }
+
+    @Test
+    public void separatorsAlwaysBracketPrefixColumnAndHeadline() {
+        LabelDocument document = ComponentLabelFactory.create(mlccRecord(), 203, 25f, 15f,
+                ComponentTemplate.COMPACT, true, true, false);
+        TextElement vertical = document.find("component_sep_v");
+        TextElement headline = document.find("component_sep_head");
+        assertNotNull(vertical);
+        assertNotNull(headline);
+        assertEquals(TextElement.TYPE_LINE, vertical.type);
+        assertEquals("v", vertical.format);
+        assertEquals("h", headline.format);
+        // 25×15 简洁 4 行 pitch≈3.5mm ≥2.8 → 行间横线也补齐
+        assertNotNull(document.find("component_sep_r2"));
+    }
+
+    @Test
+    public void crampedLabelDropsLowPriorityFieldsUntilRowsFit() {
+        // 20×10 标准模板 6 候选行 → pitch 不足，依次丢 品牌→品类，保留 型号/规格/封装/立创
+        LabelDocument document = ComponentLabelFactory.create(mlccRecord(), 203, 20f, 10f,
+                ComponentTemplate.STANDARD, true, true, false);
+        assertNotNull(document.find("component_model"));
+        assertNotNull(document.find("component_spec"));
+        assertNotNull(document.find("component_package"));
+        assertNotNull(document.find("component_supplier"));
+        assertNull(document.find("component_brand"));
+        assertNull(document.find("component_category"));
+        assertEquals(8, countTextElements(document));
+        assertSingleLineFits(document);
+        assertValueRowsDoNotOverlap(document);
+        // 行距 <2.8mm：只有竖线和标题横线，不补行间线
+        assertEquals(2, countLineElements(document));
+    }
+
+    @Test
+    public void largeLabelKeepsAllFieldsAndAddsTableLikeRowLines() {
+        LabelDocument document = ComponentLabelFactory.create(mlccRecord(), 203, 40f, 30f,
+                ComponentTemplate.DETAILED, true, true, false);
+        assertEquals(14, countTextElements(document));
+        assertNotNull(document.find("component_sep_v"));
+        assertNotNull(document.find("component_sep_head"));
+        assertNotNull(document.find("component_sep_r2"));
+        assertNotNull(document.find("component_sep_r6"));
         assertSingleLineFits(document);
         assertValueRowsDoNotOverlap(document);
     }

@@ -372,9 +372,8 @@ public final class EmbeddedScannerController {
                 templateController.templateLargeFont(), templateController.templateFields());
         host.setDocument(created);
         host.labelCanvas().setDocument(created);
-        TextElement first = created.elements.isEmpty() ? null : created.elements.get(0);
-        host.labelCanvas().select(first == null ? null : first.id);
-        host.showSelectedElement(first);
+        // 不默认选中首元素：选择框等用户点按后再出现。
+        host.showSelectedElement(null);
         host.refreshDocumentControls();
         host.persistAndRedraw();
         if (announce) toast("已离线解析" + record.supplier.label + "贴纸并生成器件标签");

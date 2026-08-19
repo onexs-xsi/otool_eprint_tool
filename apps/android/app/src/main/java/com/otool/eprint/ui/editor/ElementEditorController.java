@@ -864,9 +864,7 @@ public final class ElementEditorController {
         host.setDocument(restored);
         DocumentStore.save(activity, host.workMode(), restored);
         host.labelCanvas().setDocument(restored);
-        TextElement first = restored.elements.isEmpty() ? null : restored.elements.get(0);
-        host.labelCanvas().select(first == null ? null : first.id);
-        showSelectedElement(first);
+        showSelectedElement(null);
         host.refreshDocumentControls();
         host.labelCanvas().invalidate();
         host.updateCompatibilityWarning();
