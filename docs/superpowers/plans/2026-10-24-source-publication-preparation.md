@@ -29,28 +29,33 @@
 
 ### Task 1: Remove embedded authorization
 
-- [ ] Back up all refs and local license/document changes.
-- [ ] Add credential selection regression tests: no configured credentials; valid explicit credentials; incomplete/invalid credentials rejected; defensive copies.
-- [ ] Run the tests and observe the expected missing-interface failure.
-- [ ] Remove default token data, API, profile state, persistence, UI and connection-service fallback; retain explicit credentials.
-- [ ] Run focused tests, then all JVM tests and Lint.
+- [x] Back up all refs and local license/document changes.
+- [x] Add credential selection regression tests: no configured credentials; valid explicit credentials; incomplete/invalid credentials rejected; defensive copies.
+- [x] Run the tests and observe the expected missing-interface failure.
+- [x] Remove default token data, API, profile state, persistence, UI and connection-service fallback; retain explicit credentials.
+- [x] Run focused tests, then all JVM tests and Lint.
 
 ### Task 2: License, provenance and portable builds
 
-- [ ] Add upstream license texts and notices for vendored headers/libraries, models and direct dependencies; record hashes/source refs for bundled assets.
-- [ ] Exclude raw catalog snapshots pending permission; document optional local data and independently written protocol scope.
-- [ ] Document Wrapper/JDK/SDK/NDK/CMake setup and optional GLM/Qwen provisioning; parameterize ADB and build tool discovery.
-- [ ] Validate a clean tracked-source checkout without the private catalog; compile Java, test classes and JNI, without packaging an APK.
+- [x] Add upstream license texts and notices for vendored headers/libraries, models and direct dependencies; record hashes/source refs for bundled assets.
+- [x] Exclude raw catalog snapshots pending permission; document optional local data and independently written protocol scope.
+- [x] Document Wrapper/JDK/SDK/NDK/CMake setup and optional GLM/Qwen provisioning; parameterize ADB and build tool discovery.
+- [x] Validate a clean tracked-source checkout without the private catalog; compile Java, test classes and JNI, without packaging an APK.
 
 ### Task 3: Sanitize history and finalize locally
 
-- [ ] Commit verified source changes locally.
-- [ ] Filter an independent mirror: redact embedded credentials in every historical blob and message; remove raw catalog data and private device endpoints; retain ordinary development history.
-- [ ] Scan filtered refs and inspect the final tree before updating local refs.
-- [ ] Update local refs to verified rewritten commits; preserve remote URL but do not push.
-- [ ] Verify clean status, reachable-history audit and local bundle backup; report remote-history limitations explicitly.
+- [x] Commit verified source changes locally.
+- [x] Filter an independent mirror: redact embedded credentials in every historical blob and message; remove raw catalog data and private device endpoints; retain ordinary development history.
+- [x] Scan filtered refs and inspect the final tree before updating local refs.
+- [x] Update local refs to verified rewritten commits; preserve remote URL but do not push.
+- [x] Verify clean status, reachable-history audit and local bundle backup; report remote-history limitations explicitly.
 
 ## Execution Ledger
 
 - Authorized scope is local preparation; remote history cleanup will remain pending until a separately authorized push.
 - History filtering is performed in a disposable independent mirror rather than a worktree sharing the original object database. The primary checkout is used for the source edits so its existing private SDK remains available; no concurrent writers are used.
+
+- Completed: credential selection regression (6 tests), JVM suite 232/232, Python verifier 5/5, clean Wrapper/JNI/device-test compilation, Lint 0 errors / 379 warnings.
+- Review: fixed POSIX executable bit and deploymentConfig verification; added red/green regression evidence.
+- History: git-filter-repo skipped Codex tree refs; all three were covered by the verified bundle, removed from the disposable mirror and primary refs, and the entire reachable-history audit rerun with zero findings. Current main tree was identical before/after filtering.
+- Remote work remains explicitly out of scope: no push or visibility changes; local remote-tracking refs are sanitized and do not describe the unchanged server history.
