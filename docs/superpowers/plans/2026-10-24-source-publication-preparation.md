@@ -58,4 +58,4 @@
 - Completed: credential selection regression (6 tests), JVM suite 232/232, Python verifier 5/5, clean Wrapper/JNI/device-test compilation, Lint 0 errors / 379 warnings.
 - Review: fixed POSIX executable bit and deploymentConfig verification; added red/green regression evidence.
 - History: git-filter-repo skipped Codex tree refs; all three were covered by the verified bundle, removed from the disposable mirror and primary refs, and the entire reachable-history audit rerun with zero findings. Current main tree was identical before/after filtering.
-- Remote work remains explicitly out of scope: no push or visibility changes; local remote-tracking refs are sanitized and do not describe the unchanged server history.
+- Remote work was excluded from the original preparation. In a subsequent explicit user request, the cleaned main history was synced to the original remote using an exact expected-old-SHA force-with-lease. Visibility and releases were not changed; tracking refs match the server again. See SOURCE_PUBLICATION_CHECK.md for the follow-up record.
