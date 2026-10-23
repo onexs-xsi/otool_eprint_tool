@@ -1293,7 +1293,7 @@ public final class MainActivity extends AppCompatActivity {
             public void onSettingsSaved(RecognitionSettings saved) {
                 recognitionSettings = saved;
                 scannerController.resetSingleDecode();
-                recognitionController.closeVlmEngine();
+                recognitionController.closeLanguageModelEngines();
                 scannerController.applyDecoderFormats();
                 scannerController.startModeDecoding();
                 scannerController.applyScanInputModeUi();

@@ -3,10 +3,11 @@ package com.otool.eprint.scan.vlm;
 import java.util.HashMap;
 
 /**
- * GLM-OCR（MNN-LLM 3.6.1 预编译 libllm）native 会话薄封装。
+ * MNN-LLM 3.6.1 预编译 libllm 的 native 会话薄封装。
  * 对应 C++ 侧 {@code app/src/main/cpp/glm_ocr_jni.cpp}（参照 MnnLlmChat Apache-2.0 裁剪）。
  *
- * 线程模型：所有方法 synchronized，调用方保证单线程使用（VlmOcrEngine 串行调度）。
+ * 兼容期类名保留为 GlmOcrSession；GLM 视觉 OCR 与 Qwen text-only 均可复用普通文本 submit。
+ * 线程模型：所有方法 synchronized，调用方保证单线程使用。
  * native 库缺失（如单测环境）时 {@link #isNativeAvailable()} 返回 false，不抛异常。
  */
 public final class GlmOcrSession {

@@ -1,5 +1,5 @@
 //
-// glm_ocr_jni.cpp — GLM-OCR (MNN-LLM) 薄 JNI wrapper。
+// glm_ocr_jni.cpp — GLM-OCR / Qwen text-only 共用的 MNN-LLM 薄 JNI wrapper。
 //
 // 参照 MnnLlmChat（Apache-2.0，MNN 官方安卓 app）的 JNI 层裁剪：
 //   保留 load / submit（流式回调）/ reset / release / maxNewTokens / updateConfig；
@@ -103,6 +103,17 @@ struct StreamState {
         pendingEop = false;
     }
 };
+
+// MNN 3.6.1 Android 预编译 libllm 的 reset() 不会清除 USER_CANCEL（与 tag 当前源码不同）。
+// 只修复用户主动取消状态；INTERNAL_ERROR/TIMEOUT 保持不可复用，避免掩盖真实引擎故障。
+void resetForNextResponse(Llm* llm) {
+    if (llm == nullptr) return;
+    llm->reset();
+    auto* context = const_cast<LlmContext*>(llm->getContext());
+    if (context != nullptr && context->status == LlmStatus::USER_CANCEL) {
+        context->status = LlmStatus::RUNNING;
+    }
+}
 
 void putLong(JNIEnv* env, jobject map, jmethodID putMethod, const char* key, jlong value) {
     jclass longClass = env->FindClass("java/lang/Long");
@@ -227,7 +238,7 @@ Java_com_otool_eprint_scan_vlm_GlmOcrSession_nativeSubmit(JNIEnv* env, jobject t
 
     int maxNewTokens = session->maxNewTokens;
     try {
-        session->llm->reset();
+        resetForNextResponse(session->llm);
         // 图片由引擎解析 prompt 内嵌的 <img>绝对路径</img> 并进入视觉编码器。
         // 让 response 自己维护 prefill/decode/终止状态，避免手工逐 token 解码破坏状态机。
         session->llm->response(prompt, &outputStream, "<eop>", maxNewTokens);
@@ -268,7 +279,7 @@ JNIEXPORT void JNICALL
 Java_com_otool_eprint_scan_vlm_GlmOcrSession_nativeReset(JNIEnv* env, jobject thiz,
                                                          jlong sessionPtr) {
     auto* session = reinterpret_cast<GlmSession*>(sessionPtr);
-    if (session != nullptr && session->llm != nullptr) session->llm->reset();
+    if (session != nullptr && session->llm != nullptr) resetForNextResponse(session->llm);
 }
 
 JNIEXPORT void JNICALL

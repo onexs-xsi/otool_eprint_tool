@@ -31,12 +31,18 @@ import com.otool.eprint.scan.LabelFrameProcessor;
 import com.otool.eprint.scan.LabelTextParser;
 import com.otool.eprint.scan.LcscPackageCatalog;
 import com.otool.eprint.scan.RecognitionSettings;
+import com.otool.eprint.scan.QwenComponentEnricher;
 import com.otool.eprint.scan.ScanInputMode;
 import com.otool.eprint.scan.UnitSpacingFormatter;
 import com.otool.eprint.scan.VlmTranscriptionParser;
 import com.otool.eprint.scan.ocr.LabelOcrEngine;
 import com.otool.eprint.scan.ocr.OcrLine;
 import com.otool.eprint.scan.ocr.OcrResult;
+import com.otool.eprint.scan.qwen.QwenComponentPrompt;
+import com.otool.eprint.scan.qwen.QwenSettings;
+import com.otool.eprint.scan.qwen.QwenSettingsStore;
+import com.otool.eprint.scan.qwen.QwenTextOnlyEngine;
+import com.otool.eprint.scan.qwen.QwenTextResult;
 import com.otool.eprint.scan.vlm.BarcodeMasker;
 import com.otool.eprint.scan.vlm.VlmOcrEngine;
 import com.otool.eprint.scan.vlm.VlmResult;
@@ -50,8 +56,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * 标签拍摄识别（OCR/VLM 流水线）控制器：抓帧 → 引导框 ROI → PP-OCR 级联 → GLM-OCR 信息提取
- * → 融合生成模板，以及处理过程预览与右侧识别日志。
+ * 标签拍摄识别流水线：抓帧 → 引导框 ROI → PP-OCR → 可选 GLM-OCR → Qwen text-only
+ * 安全补全 → 模板，以及处理过程预览与右侧识别日志。
  * 与宿主 Activity 共享的状态经 {@link Host} 读写，引擎与线程随 {@link #destroy()} 释放。
  */
 public final class LabelRecognitionController {
@@ -99,10 +105,12 @@ public final class LabelRecognitionController {
     private Bitmap lastLabelFrame;
     // PP-OCRv6 级联 OCR 引擎（阶段 2a）：单线程后台执行，切入标签档时预热加载。
     private final LabelOcrEngine labelOcrEngine = new LabelOcrEngine();
-    // GLM-OCR VLM 引擎（阶段 2b）：开发阶段独立展示，不启用自动回退。
+    // GLM-OCR 读图模型与 Qwen 文本模型严格串行，避免两个大模型同时常驻。
     private final VlmOcrEngine vlmOcrEngine = new VlmOcrEngine();
+    private final QwenTextOnlyEngine qwenTextOnlyEngine = new QwenTextOnlyEngine();
     /** 超时后 requestStop 生效的等待上限。 */
     private static final long VLM_STOP_WAIT_MS = 10_000;
+    private static final long QWEN_STOP_WAIT_MS = 10_000;
     private final ExecutorService ocrExecutor = Executors.newSingleThreadExecutor();
     private boolean ocrRunning;
 
@@ -137,29 +145,33 @@ public final class LabelRecognitionController {
         return recognitionLog.length() == 0;
     }
 
-    /** 模型配置保存后释放 VLM 引擎，按新配置重新加载。 */
-    public void closeVlmEngine() {
+    /** 识别配置保存后释放两个大模型引擎，按新配置重新加载。 */
+    public void closeLanguageModelEngines() {
         vlmOcrEngine.close();
+        qwenTextOnlyEngine.release();
     }
 
-    /** 重启应用前释放两个识别引擎。 */
+    /** 重启应用前释放全部识别引擎。 */
     public void closeEngines() {
         vlmOcrEngine.close();
+        qwenTextOnlyEngine.release();
         labelOcrEngine.close();
     }
 
-    /** onDestroy 委托：停止 VLM、关闭线程池与两个引擎。 */
+    /** onDestroy 委托：停止两个大模型、关闭线程池与全部引擎。 */
     public void destroy() {
         vlmOcrEngine.requestStop();
+        qwenTextOnlyEngine.requestStop();
         ocrExecutor.shutdown();
         labelOcrEngine.close();
         vlmOcrEngine.close();
+        qwenTextOnlyEngine.release();
     }
 
     /** 标签档「拍摄识别」：抓帧 → 引导框 ROI → 轮廓自校正。OCR 引擎在阶段 2 接入。 */
     public void captureAndProcessLabel() {
         if (!host.recognitionSettings().labelEnabled) {
-            toast("标签识别已在模型配置中关闭");
+            toast("标签识别已在识别配置中关闭");
             return;
         }
         if (!host.recognitionSettings().ppOcrEnabled && !host.recognitionSettings().vlmEnabled) {
@@ -184,8 +196,8 @@ public final class LabelRecognitionController {
         }
         prepareFinalRecognitionArea(ScanInputMode.LABEL);
         resetRecognitionLog("开始标签识别");
-        beginProcessingPreview(frame, "1/5 · 已抓取摄像头帧");
-        appendRecognitionLog("1/5 已抓取摄像头帧");
+        beginProcessingPreview(frame, "1/6 · 已抓取摄像头帧");
+        appendRecognitionLog("1/6 已抓取摄像头帧");
         RectF guide = labelGuideOverlay != null
                 ? labelGuideOverlay.normalizedGuideRect()
                 : new RectF(0.07f, 0.07f, 0.93f, 0.93f);
@@ -197,10 +209,10 @@ public final class LabelRecognitionController {
                 host.recognitionSettings().reduceGlare);
         lastLabelFrame = processed.bitmap;
         String processingStage = processed.perspectiveFixed
-                ? "2/5 · 真四边形透视已拉正"
+                ? "2/6 · 真四边形透视已拉正"
                 : processed.croppedToLabel
-                ? "2/5 · 已清除背景（未确认透视）"
-                : "2/5 · 已按引导框整理画面";
+                ? "2/6 · 已清除背景（未确认透视）"
+                : "2/6 · 已按引导框整理画面";
         if (processed.glareReduced) processingStage += " + 反光抑制";
         showProcessingFrame(processed.bitmap, processingStage);
         StringBuilder summary = new StringBuilder("已抓取标签画面");
@@ -235,7 +247,7 @@ public final class LabelRecognitionController {
         } else if (processed.glareReductionRequested) {
             summary.append("，反光检测未达到处理阈值或收益不足");
         }
-        appendRecognitionLog("2/5 " + summary);
+        appendRecognitionLog("2/6 " + summary);
         if (processed.blurry) toast("画面偏糊，请拿稳后重拍");
         runLabelOcr(processed.bitmap);
     }
@@ -274,14 +286,13 @@ public final class LabelRecognitionController {
             if (host.recognitionSettings().vlmEnabled) {
                 runLabelVlm(frame, cascade, ppRecord, packageMatcher);
             } else {
-                activity.runOnUiThread(() -> {
-                    if (ppRecord == null) {
-                        failLabelProcessing("PP-OCR 未识别到有效文字", "未识别到文本");
-                    } else {
-                        finalizeLabelRecognition(ppRecord,
-                                "PP-OCR 最终结果 · " + cascade.timingSummary());
-                    }
-                });
+                if (ppRecord == null) {
+                    activity.runOnUiThread(() -> failLabelProcessing(
+                            "PP-OCR 未识别到有效文字", "未识别到文本"));
+                } else {
+                    continueWithQwen(ppRecord, cascade.fullText(), packageMatcher,
+                            "PP-OCR 最终结果 · " + cascade.timingSummary());
+                }
             }
         });
     }
@@ -290,14 +301,22 @@ public final class LabelRecognitionController {
     private void runLabelVlm(Bitmap frame, OcrResult cascade,
                              ComponentRecord cascadeRecord,
                              CategoryPackageMatcher packageMatcher) {
+        // 上一轮若保留了 Qwen 会话，先释放再加载 GLM，禁止两个大模型同时常驻。
+        if (qwenTextOnlyEngine.isReady()) qwenTextOnlyEngine.release();
         vlmOcrEngine.load(activity.getApplicationContext());
         if (!vlmOcrEngine.isReady()) {
             final String reason = vlmOcrEngine.initError();
             activity.runOnUiThread(() -> {
                 appendVlmNote("VLM（GLM-OCR）不可用：" + reason
-                        + "；开发阶段未自动回退到 PP-OCR 模板");
-                finishLabelProcessing();
+                        + "；将保留 PP-OCR 并继续 Qwen text-only（如已启用）");
             });
+            if (cascadeRecord == null) {
+                activity.runOnUiThread(() -> failLabelProcessing(
+                        "GLM 不可用且 PP-OCR 无有效结果", "识别模型不可用"));
+            } else {
+                continueWithQwen(cascadeRecord, cascade.fullText(), packageMatcher,
+                        "GLM 不可用，回退 PP-OCR · " + cascade.timingSummary());
+            }
             return;
         }
         final String backendFallback = vlmOcrEngine.backendFallbackReason();
@@ -328,8 +347,8 @@ public final class LabelRecognitionController {
             if (button != null) button.setText("VLM 识别中…");
             String inputSize = structuredInput.getWidth() + "×" + structuredInput.getHeight();
             showProcessingFrame(structuredInput, maskingEnabled
-                    ? "4/5 · GLM 最终输入 " + inputSize + "：遮盖 " + maskedCount + " 处码区"
-                    : "4/5 · GLM 最终输入 " + inputSize + "：完整标签");
+                    ? "4/6 · GLM 最终输入 " + inputSize + "：遮盖 " + maskedCount + " 处码区"
+                    : "4/6 · GLM 最终输入 " + inputSize + "：完整标签");
             appendVlmNote(!maskingEnabled
                     ? "GLM 最终输入为完整标签，仅白底补方；保留二维码/一维码"
                     : maskedCount > 0
@@ -351,7 +370,7 @@ public final class LabelRecognitionController {
                     if (now - lastUiRefresh[0] < 300L) return false;
                     lastUiRefresh[0] = now;
                     final String partial = streamed.toString();
-                    activity.runOnUiThread(() -> showVlmText(cascade, partial,
+                    activity.runOnUiThread(() -> showModelText(partial,
                             "VLM（GLM-OCR 0.9B · MNN）识别中…"));
                     return false;
                 })), "vlm-ocr");
@@ -372,7 +391,7 @@ public final class LabelRecognitionController {
             }
         }
         final VlmResult vlm = vlmRef.get();
-        final boolean vlmTimedOut = timedOut && vlm == null;
+        final boolean vlmTimedOut = timedOut;
         final boolean jsonMode = vlmOcrEngine.isJsonExtractionMode();
         ComponentRecord parsed = null;
         String parseError = null;
@@ -389,46 +408,194 @@ public final class LabelRecognitionController {
                 if (parsed == null) parseError = "转写文本为空或均为退化字符";
             }
         }
-        final ComponentRecord extractedRecord = parsed;
-        final String extractionError = parseError;
+        if (vlmTimedOut) {
+            continueAfterVlmFailure(cascadeRecord, cascade, packageMatcher,
+                    "VLM 超时（>" + (timeoutMs / 1000) + "s）",
+                    "GLM 超时，回退 PP-OCR · " + cascade.timingSummary());
+            return;
+        }
+        if (vlm == null || !vlm.isOk()) {
+            String error = vlm != null ? vlm.error : "识别被中断";
+            continueAfterVlmFailure(cascadeRecord, cascade, packageMatcher,
+                    "VLM 识别失败：" + error,
+                    "GLM 失败，回退 PP-OCR · " + cascade.timingSummary());
+            return;
+        }
+        String header = "VLM（GLM-OCR 0.9B · MNN）" + (jsonMode ? "信息提取 JSON" : "文字转写")
+                + (vlmOcrEngine.loadMs() >= 0 ? " · 加载 " + vlmOcrEngine.loadMs() + "ms" : "")
+                + (maskingEnabled ? " · 码区遮盖 " + maskedCount : " · 码区遮盖关闭")
+                + " · " + vlm.timingSummary()
+                + (vlm.stopped ? " · 已截断" : "");
+        activity.runOnUiThread(() -> showModelText(vlm.text, header));
+        if (parsed == null) {
+            continueAfterVlmFailure(cascadeRecord, cascade, packageMatcher,
+                    (jsonMode ? "VLM JSON 校验失败：" : "VLM 转写结果无效：") + parseError,
+                    "GLM 结果无效，回退 PP-OCR · " + cascade.timingSummary());
+            return;
+        }
+        ComponentRecord fusedRecord = ComponentRecordFusion.merge(
+                cascadeRecord, parsed,
+                host.recognitionSettings().fusionWeightLevel,
+                packageMatcher,
+                host.recognitionSettings().dictionaryStrongWeight);
+        String qwenEvidence = cascade.fullText() + "\nGLM_OCR_TEXT:\n" + vlm.text;
+        String baseTiming = "双通道融合（权重 " + host.recognitionSettings().fusionWeightLevel
+                + " 档）· 字典强权重"
+                + (host.recognitionSettings().dictionaryStrongWeight ? "开启" : "关闭") + " · "
+                + (maskingEnabled ? "码区遮盖 " + maskedCount : "码区遮盖关闭")
+                + " · " + vlm.timingSummary();
+        activity.runOnUiThread(() -> toast("VLM 识别完成：" + vlm.totalMs + "ms"));
+        continueWithQwen(fusedRecord, qwenEvidence, packageMatcher, baseTiming);
+    }
+
+    private void continueAfterVlmFailure(ComponentRecord ppRecord, OcrResult cascade,
+                                         CategoryPackageMatcher packageMatcher,
+                                         String detail, String timing) {
         activity.runOnUiThread(() -> {
-            if (vlmTimedOut) {
-                appendVlmNote("VLM 超时（>" + (timeoutMs / 1000)
-                        + "s），开发阶段未自动回退到 PP-OCR 模板");
-                toast("VLM 识别超时");
-                finishLabelProcessing();
-            } else if (vlm == null || !vlm.isOk()) {
-                String error = vlm != null ? vlm.error : "识别被中断";
-                appendVlmNote("VLM 识别失败：" + error
-                        + "；开发阶段未自动回退到 PP-OCR 模板");
-                toast("VLM 识别失败");
-                finishLabelProcessing();
+            appendVlmNote(detail + "；将保留 PP-OCR 并继续 Qwen（如已启用）");
+            toast(detail.startsWith("VLM 超时") ? "VLM 识别超时" : "VLM 识别失败，已安全回退");
+        });
+        if (ppRecord == null) {
+            activity.runOnUiThread(() -> failLabelProcessing(
+                    detail + "，且 PP-OCR 无有效结果", "未得到可用识别结果"));
+        } else {
+            continueWithQwen(ppRecord, cascade.fullText(), packageMatcher, timing);
+        }
+    }
+
+    /** OCR/GLM 完成后的 Qwen3.5 text-only 严格补全；任何失败都保留 baseRecord。 */
+    private void continueWithQwen(ComponentRecord baseRecord, String ocrEvidence,
+                                  CategoryPackageMatcher packageMatcher, String baseTiming) {
+        QwenSettings settings = QwenSettingsStore.load(activity.getApplicationContext());
+        if (!settings.enabled) {
+            activity.runOnUiThread(() -> {
+                appendRecognitionLog("5/6 Qwen3.5 已在识别配置中关闭，跳过文本补全");
+                finalizeLabelRecognition(baseRecord, baseTiming + " · Qwen关闭");
+            });
+            return;
+        }
+        List<String> missingFields = QwenComponentPrompt.missingCoreFields(baseRecord);
+        if (settings.onlyWhenCoreFieldsMissing && !settings.allowEvidenceBackedCorrections
+                && missingFields.isEmpty()) {
+            activity.runOnUiThread(() -> {
+                appendRecognitionLog("5/6 Qwen3.5 跳过：核心字段已完整");
+                finalizeLabelRecognition(baseRecord, baseTiming + " · Qwen按配置跳过");
+            });
+            return;
+        }
+
+        // 进入 Qwen 前主动关闭 GLM，避免 0.9B 视觉模型与 2B 文本模型同时驻留。
+        if (vlmOcrEngine.isReady()) vlmOcrEngine.close();
+        long qwenLoadStart = System.currentTimeMillis();
+        qwenTextOnlyEngine.load(activity.getApplicationContext(), settings);
+        if (!qwenTextOnlyEngine.isReady()) {
+            String reason = qwenTextOnlyEngine.initError();
+            activity.runOnUiThread(() -> {
+                appendRecognitionLog("5/6 Qwen3.5 不可用：" + reason + "；保留 OCR/GLM 结果");
+                finalizeLabelRecognition(baseRecord, baseTiming + " · Qwen不可用");
+            });
+            return;
+        }
+        String prompt = QwenComponentPrompt.build(baseRecord, ocrEvidence, settings);
+        String forbidden = QwenTextOnlyEngine.forbiddenPromptReason(prompt);
+        if (forbidden != null) {
+            activity.runOnUiThread(() -> {
+                appendRecognitionLog("5/6 Qwen3.5 请求被 text-only 门禁拒绝：" + forbidden);
+                finalizeLabelRecognition(baseRecord, baseTiming + " · Qwen请求拒绝");
+            });
+            return;
+        }
+
+        final long loadMs = qwenTextOnlyEngine.loadMs() >= 0
+                ? qwenTextOnlyEngine.loadMs() : System.currentTimeMillis() - qwenLoadStart;
+        activity.runOnUiThread(() -> {
+            Button button = findScanButton();
+            if (button != null) button.setText(settings.allowEvidenceBackedCorrections
+                    ? "Qwen 校验纠错中…" : "Qwen 补全中…");
+            showProcessingFrame(lastLabelFrame, settings.allowEvidenceBackedCorrections
+                    ? "5/6 · Qwen3.5 text-only 明显错误校验中"
+                    : "5/6 · Qwen3.5 text-only 文本补全中");
+            appendRecognitionLog("5/6 Qwen3.5-2B text-only 已实际调用"
+                    + " · CPU " + settings.threadCount + " 线程"
+                    + " · Token 上限 " + settings.maxNewTokens
+                    + " · 加载 " + loadMs + "ms"
+                    + (settings.allowEvidenceBackedCorrections
+                    ? " · 明显错误修正已开启" : " · 只补空字段")
+                    + (missingFields.isEmpty() ? " · 当前核心字段完整，执行校验"
+                    : " · 待补字段 " + missingFields));
+        });
+
+        StringBuilder streamed = new StringBuilder();
+        AtomicReference<QwenTextResult> qwenRef = new AtomicReference<>();
+        long[] lastUiRefresh = {0L};
+        Thread qwenThread = new Thread(() -> qwenRef.set(qwenTextOnlyEngine.generate(prompt, chunk -> {
+            streamed.append(chunk);
+            long now = System.currentTimeMillis();
+            if (now - lastUiRefresh[0] < 300L) return false;
+            lastUiRefresh[0] = now;
+            String partial = streamed.toString();
+            activity.runOnUiThread(() -> showModelText(partial,
+                    "Qwen3.5-2B · MNN text-only 补全中…"));
+            return false;
+        })), "qwen-text-only");
+        qwenThread.start();
+        boolean timedOut = false;
+        try {
+            qwenThread.join(settings.timeoutMs());
+            timedOut = qwenThread.isAlive();
+            if (timedOut) {
+                qwenTextOnlyEngine.requestStop();
+                qwenThread.join(QWEN_STOP_WAIT_MS);
+            }
+        } catch (InterruptedException ignored) {
+            Thread.currentThread().interrupt();
+            timedOut = true;
+            qwenTextOnlyEngine.requestStop();
+        }
+        QwenTextResult qwen = qwenRef.get();
+        QwenComponentEnricher.Result enrichment = null;
+        String validationError = null;
+        if (!timedOut && qwen != null && qwen.isOk() && !qwen.stopped) {
+            try {
+                enrichment = QwenComponentEnricher.apply(baseRecord, qwen.text,
+                        ocrEvidence, packageMatcher, settings);
+            } catch (Exception invalid) {
+                validationError = invalid.getMessage();
+            }
+        }
+        final boolean qwenTimedOut = timedOut;
+        final QwenTextResult qwenResult = qwen;
+        final QwenComponentEnricher.Result enrichmentResult = enrichment;
+        final String qwenValidationError = validationError;
+        // GLM 开启时下一轮还要先读图；Qwen 本轮结束后释放，维持单大模型常驻边界。
+        if (!qwenThread.isAlive() && host.recognitionSettings().vlmEnabled) {
+            qwenTextOnlyEngine.release();
+        }
+        activity.runOnUiThread(() -> {
+            if (qwenTimedOut) {
+                appendRecognitionLog("5/6 Qwen3.5 超时（>" + settings.timeoutSeconds
+                        + "s），已停止并保留 OCR/GLM 结果");
+                finalizeLabelRecognition(baseRecord, baseTiming + " · Qwen超时回退");
+            } else if (qwenResult == null || !qwenResult.isOk() || qwenResult.stopped) {
+                String reason = qwenResult == null ? "生成被中断"
+                        : qwenResult.error != null ? qwenResult.error : "生成被停止";
+                appendRecognitionLog("5/6 Qwen3.5 失败：" + reason + "；保留 OCR/GLM 结果");
+                finalizeLabelRecognition(baseRecord, baseTiming + " · Qwen失败回退");
             } else {
-                String header = "VLM（GLM-OCR 0.9B · MNN）" + (jsonMode ? "信息提取 JSON" : "文字转写")
-                        + (vlmOcrEngine.loadMs() >= 0 ? " · 加载 " + vlmOcrEngine.loadMs() + "ms" : "")
-                        + (maskingEnabled ? " · 码区遮盖 " + maskedCount : " · 码区遮盖关闭")
-                        + " · " + vlm.timingSummary()
-                        + (vlm.stopped ? " · 超时截断" : "");
-                showVlmText(cascade, vlm.text, header);
-                if (extractedRecord == null) {
-                    appendVlmNote((jsonMode ? "VLM JSON 校验失败" : "VLM 转写结果无效")
-                            + "，未写入模板：" + extractionError);
-                    toast(jsonMode ? "VLM 信息提取格式不完整" : "VLM 转写结果不可用");
-                    finishLabelProcessing();
+                showModelText(qwenResult.text,
+                        "Qwen3.5-2B · MNN text-only · vision=0ms · "
+                                + qwenResult.timingSummary());
+                if (enrichmentResult == null) {
+                    appendRecognitionLog("5/6 Qwen 输出未通过严格 JSON/证据校验："
+                            + qwenValidationError + "；保留 OCR/GLM 结果");
+                    finalizeLabelRecognition(baseRecord,
+                            baseTiming + " · Qwen校验拒绝 · " + qwenResult.timingSummary());
                 } else {
-                    ComponentRecord finalRecord = ComponentRecordFusion.merge(
-                            cascadeRecord, extractedRecord,
-                            host.recognitionSettings().fusionWeightLevel,
-                            packageMatcher,
-                            host.recognitionSettings().dictionaryStrongWeight);
-                    finalizeLabelRecognition(finalRecord,
-                            "双通道融合（权重 " + host.recognitionSettings().fusionWeightLevel
-                                    + " 档）· 字典强权重"
-                                    + (host.recognitionSettings().dictionaryStrongWeight
-                                    ? "开启" : "关闭") + " · "
-                                    + (maskingEnabled ? "码区遮盖 " + maskedCount : "码区遮盖关闭")
-                                    + " · " + vlm.timingSummary());
-                    toast("VLM 识别完成：" + vlm.totalMs + "ms");
+                    appendRecognitionLog("5/6 Qwen3.5 完成：" + enrichmentResult.summary()
+                            + " · vision=0ms · " + qwenResult.timingSummary());
+                    finalizeLabelRecognition(enrichmentResult.record,
+                            baseTiming + " · Qwen " + enrichmentResult.summary()
+                                    + " · " + qwenResult.timingSummary());
                 }
             }
         });
@@ -441,16 +608,16 @@ public final class LabelRecognitionController {
         }
         host.setComponentRecord(record);
         showFinalRecognition(ScanInputMode.LABEL, record.summary());
-        appendRecognitionLog("5/5 " + timing);
+        appendRecognitionLog("6/6 " + timing);
         appendRecognitionLog("模板阶段：全部模型完成后生成");
         host.regenerateComponentTemplateIfNeeded();
-        showProcessingFrame(lastLabelFrame, "5/5 · 融合完成，模板已生成");
+        showProcessingFrame(lastLabelFrame, "6/6 · 全部模型完成，模板已生成");
         finishLabelProcessing();
     }
 
     /** VLM 流式输出只进入右侧识别日志，底部始终留给最终结构化结果。 */
-    private void showVlmText(OcrResult cascade, String vlmText, String header) {
-        recognitionStream = "\n── " + header + " ──\n" + vlmText;
+    private void showModelText(String modelText, String header) {
+        recognitionStream = "\n── " + header + " ──\n" + modelText;
         renderRecognitionLog();
     }
 
@@ -509,16 +676,16 @@ public final class LabelRecognitionController {
             String status = host.recognitionSettings().ppOcrEnabled
                     ? "PP-OCR 未识别到文字，继续等待 GLM-OCR"
                     : "PP-OCR 已关闭，直接进入 GLM-OCR";
-            appendRecognitionLog("3/5 " + status);
-            showProcessingFrame(frame, "3/5 · " + status);
+            appendRecognitionLog("3/6 " + status);
+            showProcessingFrame(frame, "3/6 · " + status);
             return;
         }
         String summary = record.summary() + "\n" + result.timingSummary()
                 + "\nPP-OCR 为中间结果；模板等待全部模型完成";
-        appendRecognitionLog("3/5 PP-OCR 原文：\n" + result.fullText());
+        appendRecognitionLog("3/6 PP-OCR 原文：\n" + result.fullText());
         appendRecognitionLog(summary);
         showProcessingFrame(drawOcrRegions(frame, result),
-                "3/5 · PP-OCR 已定位 " + result.lines.size() + " 行文字");
+                "3/6 · PP-OCR 已定位 " + result.lines.size() + " 行文字");
     }
 
     private void beginProcessingPreview(Bitmap frame, String stage) {
@@ -568,7 +735,7 @@ public final class LabelRecognitionController {
     private void showProcessingFrame(Bitmap frame, String stage) {
         if (processingPreview != null && frame != null
                 && (host.recognitionSettings().showProcessingPreview
-                || processingPreview.getDrawable() == null || stage.startsWith("5/5"))) {
+                || processingPreview.getDrawable() == null || stage.startsWith("6/6"))) {
             processingPreview.setImageBitmap(frame);
             processingPreview.setVisibility(View.VISIBLE);
         }
@@ -630,7 +797,7 @@ public final class LabelRecognitionController {
         return annotated;
     }
 
-    /** 切入标签档时后台预热模型（幂等，失败只记录不崩溃）。VLM 模型大、加载慢，一并预热。 */
+    /** 切入标签档时后台预热；GLM 开启时不同时预热 Qwen，维持单大模型常驻。 */
     public void warmUpLabelOcr() {
         if (host.recognitionSettings().ppOcrEnabled
                 && !labelOcrEngine.isReady() && labelOcrEngine.initError() == null) {
@@ -639,6 +806,13 @@ public final class LabelRecognitionController {
         if (host.recognitionSettings().vlmEnabled
                 && !vlmOcrEngine.isReady() && vlmOcrEngine.initError() == null) {
             ocrExecutor.execute(() -> vlmOcrEngine.load(activity.getApplicationContext()));
+        } else if (!host.recognitionSettings().vlmEnabled) {
+            QwenSettings qwenSettings = QwenSettingsStore.load(activity.getApplicationContext());
+            if (qwenSettings.enabled && !qwenTextOnlyEngine.isReady()
+                    && qwenTextOnlyEngine.initError() == null) {
+                ocrExecutor.execute(() -> qwenTextOnlyEngine.load(
+                        activity.getApplicationContext(), qwenSettings));
+            }
         }
     }
 

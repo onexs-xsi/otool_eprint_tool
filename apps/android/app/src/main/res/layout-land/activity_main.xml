@@ -84,7 +84,7 @@
                 android:minWidth="0dp"
                 android:paddingStart="12dp"
                 android:paddingEnd="12dp"
-                android:text="模型配置"
+                android:text="识别配置"
                 android:textAllCaps="false"
                 android:textColor="@color/eprint_text"
                 android:textSize="12sp" />

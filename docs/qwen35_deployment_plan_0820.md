@@ -2,14 +2,73 @@
 
 日期：2026-08-20
 
-基线：EPrint v1.5.35 / versionCode 41
+应用接入版本：EPrint v1.5.38 / versionCode 44（部署前设备基线为 v1.5.37 / 43）
 
-状态：已确定部署 `Qwen3.5-2B-MNN` 的 text-only 运行模式；尚未下载、转换、推送、加载或部署 Qwen3.5，也未修改应用业务代码
+业务调用版本：EPrint v1.5.40 / versionCode 46（在 v1.5.38 模型部署与自检基础上开放）
+
+安全纠错版本：EPrint v1.5.41 / versionCode 47（新增显式开关、互斥配置与明显错误硬门禁）
+
+状态：Qwen3.5-2B-MNN 已部署；v1.5.40 已实现默认 fill-only/证据 validator 并接入“拍摄识别”主链路，v1.5.41 新增默认关闭的“修正明显错误”模式；两种模式均已通过全量构建、真机业务 Prompt 和 text-only `vision_time=0` 验证
 
 本计划的 text-only 定义：Qwen3.5 只接收 PP-OCR/规则生成的普通文本请求，不接收图片，不生成
 `<img>...</img>` prompt，不进入 MNN 多模态 prompt 分支；每次生成的 `vision_time` 必须为 0。
 官方完整模型快照仍保留视觉相关文件，以避免破坏模型完整性；“不执行视觉编码器”与“加载时是否
 仍映射视觉权重”分开验收，不能通过删除文件或伪造 `is_visual=false` 规避。
+
+## 0. 部署执行记录
+
+| 时间 | 检查项 | 结果 |
+|---|---|---|
+| 2026-08-20 | 工作区版本基线 | `apps/android/app/build.gradle` 为 v1.5.37 / versionCode 43；设备安装版本一致 |
+| 2026-08-20 | 远程 ADB | 已连接 `DEVICE_IP:ADB_PORT`，设备 `SM-X800`，Android 14 / API 34，Qualcomm 平台 |
+| 2026-08-20 | 设备存储 | `/sdcard` 可用约 9.1 GB；现有 `glm-ocr-mnn` 占约 966 MB，具备部署 2B 模型的空间余量 |
+| 2026-08-20 | 本地运行时物料 | MNN 3.6.1 arm64 so、头文件、NDK/CMake 与 `glm_smoke` 冒烟程序均已存在 |
+| 2026-08-20 | Qwen 官方 revision | `taobao-mnn/Qwen3.5-2B-MNN@35781816d7b6a9dcb273a6765ac9563401951c3c`；`git ls-remote` 与 Hugging Face API 返回一致 |
+| 2026-08-20 | Qwen 官方文件清单 | 快照约 1.39 GB；`llm.mnn.weight` 1,176,647,702 B，`visual.mnn.weight` 195,587,264 B，其余配置、图结构与 tokenizer 约 14.5 MB |
+| 2026-08-20 | 首次下载尝试 | Git 仓库与小文件已落地，但 Git LFS 两个权重的临时文件超过 80 秒仍为 0 B；已中止该无进度进程，保留仓库并切换 Hugging Face 官方 `hf_xet` 下载链路 |
+| 2026-08-20 | 镜像续传 | Hugging Face CDN 直传在 720,896 B 后停滞；ModelScope 官方 `MNN/Qwen3.5-2B-MNN` 镜像对语言权重返回相同 ETag `c93f71...219690`，据此续传同一对象，约 45 MB/s 完成；视觉权重约 22 MB/s 完成 |
+| 2026-08-20 | 下载校验 | 11 个官方文件均已落地，字节数与 API 一致；语言/视觉权重 SHA-256 分别为 `c93f71...219690` / `8f90e1...60376860`，与官方对象标识一致；完整清单见 `.tools/verification/qwen35-2b-mnn-sha256.txt` |
+| 2026-08-20 | text-only 冒烟配置 | 保留官方 `llm_config.json` 的 `is_visual=true` 与完整视觉文件；新增独立 `qwen35-config-device.json`，只配置 `llm.mnn` / `llm.mnn.weight`、CPU 4 线程、关闭 thinking；复用 plain-string `glm_smoke`，不构造图片或视觉 token |
+| 2026-08-20 | 远程推送 | 完整快照与独立 text-only 配置已推送到 `/data/local/tmp/qwen35/model`；语言/视觉权重分别以 28.7 / 30.1 MB/s 完成，未改动现有 `/data/local/tmp/glm` 与应用模型目录 |
+| 2026-08-20 | 设备端校验 | 权重字节数为 1,176,647,702 / 195,587,264 B，设备端 SHA-256 与本地及官方对象标识完全一致；推送后设备可用空间约 7.8 GB |
+| 2026-08-20 | 首次 text-only 推理 | MNN 3.6.1 / CPU 4 线程 / low precision 加载与生成成功；输出 `{"ok":true,"model":"Qwen3.5-2B"}`，流尾另有 `<eop>`，应用解析前必须剥离终止标记 |
+| 2026-08-20 | 首次性能指标 | `prompt=39`、`decode=17`、`prefill_us=558154`、`decode_us=992127`，约 17 token/s；`vision_us=0`，确认本次普通字符串请求未执行视觉编码器 |
+| 2026-08-20 | 256-token 压测 | `prompt=32`、`decode=256`、`prefill_us=559071`、`decode_us=14676885`，约 17.4 token/s，`vision_us=0`；达到 token 上限时按预期截断 |
+| 2026-08-20 | 1024-token / 内存压测 | `prompt=33`、`decode=1024`、`prefill_us=336388`、`decode_us=68189916`，约 15.0 token/s，`vision_us=0`；运行中 PSS 约 1.55 GB、RSS 约 1.56 GB、`VmHWM` 约 1.98 GB、swap 0、线程数 4 |
+| 2026-08-20 | 同进程 reset | 两轮分别准确返回 `{"round":1}` / `{"round":2}`，第二轮未串入第一轮上下文；两轮 `vision_us=0`，普通完成后的 `reset()` 可用 |
+| 2026-08-20 | 取消与恢复（发现问题） | 按现有 JNI 方式在 32 字节后设置 `LlmStatus::USER_CANCEL`，生成于 32 token 停止、`status=3`、`vision_us=0`；随后仅调用 `reset()` 时状态仍为 3，恢复请求 `decode=0` 且空输出。必须补充“取消后状态恢复”修复并复测，不能直接宣告可集成 |
+| 2026-08-20 | 取消问题根因 | 当前设备与应用使用的预编译 `libllm.so` SHA-256 为 `196691...95b3`；反汇编确认其中 `Llm::reset()` 清空 token/计时数据但不写 `LlmContext::status`，与 MNN `3.6.1` tag 当前源码中 reset 后恢复 `RUNNING` 的实现不一致。最小兼容方案是仅在 `USER_CANCEL` 后显式恢复为 `RUNNING`，并做取消后恢复复测 |
+| 2026-08-20 | 取消兼容修复复测 | 在 `reset()` 后仅当状态仍为 `USER_CANCEL` 时显式设回 `RUNNING`：取消保持在 32 token 停止，随后恢复请求正确返回 `{"recovered":true}`，最终 `status=NORMAL_FINISHED(1)`；取消与恢复两段 `vision_us=0`。该兼容逻辑需同步到应用 JNI |
+| 2026-08-20 | 20 轮稳定性 | 同一已加载会话连续执行 20 轮 `reset → strict JSON`，`passed=20/20`；每轮输出与期望字节一致（剥离统一 `<eop>` 后为合法 JSON），每轮 `vision_us=0`，无崩溃、无上下文串扰 |
+| 2026-08-20 | 应用层接入 | v1.5.38 / code 44 新增独立 `QwenTextOnlyEngine`、`QwenTextResult`、固定 revision/全文件 SHA-256 校验、视觉 prompt 前置拒绝、non-thinking 与 `vision_time=0` 后置门禁；模型配置页显示部署状态。自动字段补全仍关闭，待 fill-only/证据 validator 完成 |
+| 2026-08-20 | 应用正式模型目录 | 完整快照、`config-text-only.json` 和 `model_manifest.json` 已复制到 `/sdcard/Android/data/com.otool.eprint/files/models/qwen3.5-2b-mnn/`；关键权重和 text-only 配置设备端 SHA-256 再次一致，复制后设备可用约 6.5 GB |
+| 2026-08-20 | JVM 定向测试 | `QwenTextOnlyEngineTest` 与 `VlmOcrEngineTest` 通过；主 Java 代码编译通过；随后已纳入 212 项全量单测门禁 |
+| 2026-08-20 | v1.5.38 构建门禁 | 212 项 JVM 单测零失败；`lintDebug`、`assembleDebug`、`assembleDebugAndroidTest` 成功；APK 元数据为 1.5.38 / 44，无 `INTERNET` 权限、无 Qwen 权重，ZIP 与关键 native ELF 均通过 16 KB 对齐检查 |
+| 2026-08-20 | 首次应用进程自检（部署权限问题） | 主 APK 覆盖安装成功且设备确认 1.5.38 / 44；instrumentation 在加载前报告缺 `model_manifest.json`。shell 与 `run-as` 可列出文件，但模型目录由 shell 创建并归 shell 所有；需改为应用 UID 创建正式目录和文件后复测，不能把该结果误记为模型加载失败 |
+| 2026-08-20 | 应用 UID 修复与复测 | 由 `u0_a345` 创建正式模型目录并复制文件后，instrumentation `textOnlyJsonAndCancelRecovery` 通过（1/1，10.871 秒）：应用进程完成全量 SHA-256、加载、严格 JSON、32-token 取消及取消后恢复 |
+| 2026-08-20 | 应用进程 native 指标 | 全量校验+加载 7,683 ms；JSON `prompt=26/decode=6/vision=0us`，取消 `32/32/0us`，恢复 `27/7/0us`；恢复输出正确，native 会话正常释放 |
+| 2026-08-20 | 视觉权重映射审计 | 1024-token 文本运行中 `/proc/maps` 的 `visual.mnn*` 映射数为 0，同时 `llm.mnn*` 映射数也为 0，说明该预编译运行时把权重读入匿名内存，不能仅靠 maps 证明视觉权重未读入；可确认的是配置不引用 visual 文件、请求未含视觉输入且 `vision_time=0`。文档/UI 不宣称“视觉权重未加载” |
+| 2026-08-20 | 临时副本清理 | 应用正式目录及哈希保持不变后，删除本轮创建的 `/data/local/tmp/qwen35` 与 `qwen3.5-2b-mnn-shell-stage` 两个临时副本；本地已校验源副本仍保留，可恢复。设备 `/sdcard` 可用空间回到约 7.8 GB |
+| 2026-08-20 | APK 归档与最终安装 | `EPrint-native-v1.5.38-debug.apk` 已归档，86,760,702 B，SHA-256 `42F88F...3CCBC`，v2 Debug 签名；设备确认 1.5.38 / 44，冷启动 1,180 ms、进程存活、最近 300 行进程日志无 FATAL/ANR/native fatal |
+| 2026-08-20 | v1.5.40 调用根因 | v1.5.38~v1.5.39 只有 `QwenTextOnlyEngine`、部署状态和 instrumentation 自检，`LabelRecognitionController` 没有任何 Qwen 引用；因此点击“拍摄识别”不会调用 Qwen，不是模型部署失败 |
+| 2026-08-20 | v1.5.40 业务接入实现 | 新增独立 `QwenSettings`/Store、严格七键文本 Prompt、`QwenComponentEnricher`；默认每次 OCR 后调用、只补空字段、逐字段 OCR 证据门禁、内部编码拦截与立创目录规范化，失败安全回退原 PP/GLM 结果 |
+| 2026-08-20 | v1.5.40 配置能力 | Qwen 折叠区可配置启停、仅缺失时调用、有证据纠错、目录强校验、CPU 线程、Token、超时和额外文本规则；GLM/Qwen 串行释放加载，不同时常驻 |
+| 2026-08-20 | v1.5.40 定向测试 | Qwen 设置/Prompt/引擎/证据补全共 14 项测试通过；新增“封装只嵌在型号中不算独立证据”和“纠错开关同步 Prompt”回归 |
+| 2026-08-20 | v1.5.40 全量门禁 | 224 项 JVM 单测零失败/错误/跳过；`lintDebug` 为 0 error / 389 warning；`assembleDebug` 与 `assembleDebugAndroidTest` 成功 |
+| 2026-08-20 | v1.5.40 应用进程业务测试 | 最终 APK 的 instrumentation 1/1 通过（18.189 秒）：正式模型完成严格 JSON、业务 Prompt+validator、32 字符后取消及恢复；业务补全接受品类/封装/品牌，全部请求 `vision_time=0` |
+| 2026-08-20 | v1.5.40 真实拍摄按钮链路 | 真机点击“拍摄识别”后日志明确显示 Qwen“已实际调用”；PP-OCR 1,603 ms，Qwen 加载 4,636 ms，`prompt=350/decode=102`、prefill/decode 5,991/5,112 ms、生成 11,204 ms、`vision=0us`；完整字段仅校验不改写，模板只生成一次 |
+| 2026-08-20 | v1.5.40 配置 UI 真机检查 | Qwen 折叠区启停、按缺失调用、证据纠错、目录门禁、线程、Token、超时、额外规则均可见且依赖联动正确；测试折叠偏好已清除，未改动原识别参数 |
+| 2026-08-20 | v1.5.40 APK 归档与最终安装 | `EPrint-native-v1.5.40-debug.apk` 已归档，86,862,321 B，SHA-256 `F56021...E6D9D`，v2 Debug 签名；4/16 KiB 对齐通过，无 `INTERNET`、无 GLM/Qwen 权重；设备确认 1.5.40 / 46，冷启动 1,006 ms且无 FATAL/ANR/native fatal |
+| 2026-08-20 | v1.5.41 配置语义修复 | “允许 Qwen3.5 修正明显错误”默认关闭；开启时自动关闭并禁用“仅在核心字段缺失时调用”，持久化层也强制归一化，确保完整但可能误填的记录确实进入 Qwen 校验 |
+| 2026-08-20 | v1.5.41 明显错误门禁 | 只有当前值在本次 OCR 中无证据、可证明误取内部编码/订单号/跟踪号/批次/其他语义字段，或目录值非法时才允许改写；新值必须来自独立 OCR 行并通过字段格式及可选目录规范化，型号还必须同时包含字母和数字 |
+| 2026-08-20 | v1.5.41 真机模型风险发现 | 发布前真实 2B 推理曾把品牌 `VISHAY(威世)` 提议为型号；因此 validator 增加品牌/品类/规格/封装等非型号值硬拒绝，Prompt 在 OCR 证据之后追加经本地过滤的 `MODEL_CANDIDATE_HINTS` 与最终不可绕过规则 |
+| 2026-08-20 | v1.5.41 自动测试与构建 | 229 项 JVM 单测零失败/错误/跳过；`lintDebug` 为 0 error / 388 warning；`assembleDebug` 与 `assembleDebugAndroidTest` 成功，APK 元数据为 1.5.41 / 47 |
+| 2026-08-20 | v1.5.41 最终应用进程回归 | 最终 APK instrumentation 1/1 通过（26.484 秒）：真实模型完成普通 JSON、业务补全、明显错误修正、32-token 取消及恢复；将误填内部编码 `3427-B-D12-003` 修正为独立 OCR 型号 `CRCW06030000Z0EAHP`，全部 5 次请求均为 `vision=0us` |
+| 2026-08-20 | v1.5.41 配置 UI 真机检查 | 开启“修正明显错误”后，“仅在核心字段缺失时调用”立即取消勾选并置灰；取消对话框后清除测试折叠偏好，未保存或改动设备原 Qwen 设置；截图为 `artifacts/eprint-v1.5.41-qwen-correction-config.png` |
+| 2026-08-20 | v1.5.41 APK 归档与最终安装 | `EPrint-native-v1.5.41-debug.apk` 已归档，86,863,195 B，SHA-256 `9F0053...D2E719`，v2 Debug 签名；4/16 KiB 对齐通过，无 `INTERNET`、无 GLM/Qwen 权重；远程设备确认 1.5.41 / 47，冷启动 1,169 ms、进程存活且无 FATAL |
+
+运行时冒烟版为 v1.5.38 / versionCode 44；业务调用版已按 `eprint-release-versioning`
+递增到 v1.5.41 / versionCode 47，构建、归档、安装、文本纠错与设备版本确认均已完成。
 
 ## 1. 结论先行
 
@@ -24,13 +83,13 @@ flowchart LR
     D --> E[立创品类/品牌/封装目录校验]
     C --> F[可选 GLM-OCR 全文转写]
     F --> G[现有双通道 OCR 融合]
-    E --> H{仍有缺失或歧义?}
+    E --> H{仍有缺失，或已开启明显错误修正?}
     G --> H
     H -- 否 --> K[最终 ComponentRecord]
     H -- 是 --> I[Qwen3.5-2B-MNN
     text-only 文本补全]
     I --> J[严格 JSON + 证据 + 目录校验]
-    J -- 通过: 只补空字段 --> K
+    J -- 通过: 补空字段或修正可证明错误 --> K
     J -- 拒绝/超时 --> K
     K --> L[单位空格与模板生成]
 ```
@@ -39,8 +98,9 @@ flowchart LR
 
 1. **PP-OCR + Qwen3.5 必须可以独立工作**。GLM-OCR 是可选的第二份文字证据，不是
    Qwen3.5 的前置依赖。
-2. Qwen3.5 默认只填空字段，不覆盖已有且通过规则验证的值；输出失败、超时或模型缺失时，
-   原 PP-OCR/规则结果照常生成模板。
+2. Qwen3.5 默认只填空字段，不覆盖已有且通过规则验证的值；用户可显式开启默认关闭的明显错误
+   修正，但改写必须同时通过“现值错误证据 + 候选独立 OCR 证据 + 格式/目录”门禁。输出失败、
+   超时或模型缺失时，原 PP-OCR/规则结果照常生成模板。
 3. 首期部署型号确定为官方 4-bit `Qwen3.5-2B-MNN`；`0.8B` 仅作性能下限，`4B` 仅作质量
    对照，不在本决定中替换 2B。
 4. 首期强制使用 text-only 推理：Qwen 请求只能包含结构化文本，禁止图片路径、`<img>` 标签、
@@ -158,13 +218,15 @@ Qwen 直接读图作为后续独立实验，不进入首期发布范围。
 | OCR 增强 | PP-OCR + GLM 转写 → 融合 | 保持现有视觉转写能力，不加载 Qwen |
 | 实验全链 | PP-OCR + GLM → 释放 GLM → Qwen | 仅测试；时延较长，不默认开放 |
 
-Qwen 的细粒度开关建议为：
+v1.5.41 已落地独立细粒度配置；上表四种预设仍可作为后续快捷入口，目前不强迫用户切换预设：
 
-- `启用 Qwen3.5 缺失字段补全`：默认开启，但模型未部署时自动显示“未安装”并跳过；
-- `只补空字段`：默认开启，首个正式版本不可关闭；
-- `允许目录内推断品类/品牌/封装`：默认关闭；开启后所有推断字段显示人工核对提示；
-- `Qwen 超时`：独立于 GLM，建议初始 30 秒，上限 60 秒；
-- 高级采样参数不在第一版 UI 暴露，避免把模型稳定性变成现场配置问题。
+- `启用 Qwen3.5 OCR 后文本补全`：默认开启；模型缺失或校验失败时显示原因并安全跳过；
+- `仅在核心字段缺失时调用（节省时间；与明显错误修正互斥）`：默认关闭；开启后可跳过核心字段完整的记录；
+- `允许 Qwen3.5 修正明显错误（需 OCR/格式/目录证据，默认关闭）`：开启后会检查完整记录，并自动关闭、禁用“仅在核心字段缺失时调用”；只有现值在本次 OCR 中无证据或可证明误取其他字段/目录值，且候选通过全部硬门禁时才改写；
+- `品类/品牌/封装必须命中立创离线字典`：默认开启；
+- CPU 线程 `1-8`（默认 4）、最大输出 Token `64-512`（默认 192）、超时 `10-180` 秒（默认 60）；
+- 可追加最多 1,000 字的文本整理规则；图片路径、`<img>` 和视觉 token 会在保存/生成前拒绝；
+- CPU、low precision、low memory、greedy 与 non-thinking 仍是固定安全运行边界，不在 UI 暴露。
 
 ## 5. 目标数据契约
 
@@ -259,15 +321,20 @@ native 层必须走普通文本 `response(history_, ...)` 分支。若输出指�
 新增 `QwenCompletionValidator`，按字段执行以下规则；校验失败只拒绝该补丁，不丢弃基线记录：
 
 1. schema 版本、对象形状、字段白名单、类型和长度必须完全合法；未知键默认拒绝。
-2. `fill_only=true` 时，任何非空现有字段都不可被 Qwen 修改。
+2. 默认 `fill_only=true`，任何非空现有字段都不可被 Qwen 修改；只有用户显式开启明显错误修正时
+   才进入覆盖审计，且该设置会在 UI 与持久化层强制关闭“仅缺失时调用”。
 3. `evidence_line_ids` 必须存在，`ocr_line` 来源的值规范化后必须能在对应 OCR 行中找到；
    不相信模型自己声明的证据。
 4. 立创料号必须匹配 `C\d{5,}`，且存在于 OCR 证据中。
-5. 型号默认必须由 OCR 行支持；字母/数字纠错只有在 PP 与 GLM 两份证据一致，或后续离线
-   料号索引能反查时才允许。
-6. 品类必须能由 `CategoryPackageMatcher` 命中，或原标签存在直接文字证据。
-7. 封装必须属于已确认品类的立创目录候选；未知品类时默认不接受纯推断封装。
-8. 品牌优先命中合并后的立创品牌字典并受当前品类约束；规格、品牌、参数仍须追溯到 OCR 行，且继续执行 ROHS/QTY/订单/型号污染清理。
+5. 型号候选必须来自独立 OCR 行并同时包含字母和数字；不得等于立创料号、内部编码、订单号、
+   跟踪号、批次、品类、规格、封装、品牌或参数。Prompt 中的候选提示也只能由同一套本地规则生成。
+6. 已有值只有在本次 OCR 中找不到对应证据，或可证明误取其他语义字段、包含 `QTY`/`ROHS`、
+   料号格式非法，或目录强校验下品类/品牌/封装不合法时，才属于“明显错误”；“模型认为更好”
+   不是改写依据。
+7. 品类必须能由 `CategoryPackageMatcher` 命中，或原标签存在直接文字证据；目录修正的候选必须
+   同时具有独立 OCR 证据和目录规范化结果。
+8. 封装必须属于已确认品类的立创目录候选；品牌优先命中合并后的立创品牌字典并受当前品类
+   约束；规格、品牌、参数仍须追溯到 OCR 行，并继续执行 ROHS/QTY/订单/型号污染清理。
 9. `confidence` 只用于日志和阈值，不替代规则校验；模型自报 1.0 也无权绕过验证。
 10. 被接受的字段写入字段级 provenance：`PP_OCR`、`GLM_TRANSCRIPT`、`LCSC_CATALOG`、
     `QWEN_EXTRACTED` 或 `QWEN_INFERRED`。模板仍读取最终 `ComponentRecord`，减少改造面。
@@ -277,7 +344,10 @@ native 层必须走普通文本 `response(history_, ...)` 分支。若输出指�
 
 ## 7. 代码改造蓝图
 
-以下只是后续实施清单，本计划阶段不创建这些类。
+以下为总体实施清单。v1.5.38 先实现 `QwenTextOnlyEngine` / `QwenTextResult`、模型清单与
+应用进程自检；v1.5.40 已补齐 Prompt、严格 parser/validator、配置 Store 和识别流水线接入；
+v1.5.41 补齐可用且可证明安全的明显错误修正模式。
+字段级 provenance 与通用 JNI 类重命名仍可后续演进，不影响当前安全补全边界。
 
 ### 7.1 通用 MNN 会话层
 
@@ -294,17 +364,19 @@ prompt、视觉输入和退化检测继续留在 `VlmOcrEngine`；Qwen adapter �
 
 ### 7.2 Qwen 补全域
 
-建议新增 `scan/qwen/`：
+v1.5.41 实际落地如下：
 
-- `QwenCompletionEngine`：模型清单、装载、生成、超时、停止和性能统计；只接收文本请求，
-  并校验 native `vision_time == 0`。
-- `QwenCompletionSettings` / `Store`：模型档位、超时、最大 token、开关；与 `VlmSettings`
-  分离，避免 GLM prompt/采样迁移污染 Qwen。
-- `QwenCompletionRequest` / `Builder`：构造受限请求和 prompt。
-- `QwenCompletionResponseParser`：严格解析补丁 schema。
-- `QwenCompletionValidator`：执行第 6 节门槛。
-- `QwenCompletionDecision`：保存接受、拒绝、abstain、原因、字段 provenance 与耗时。
-- `QwenModelManifest`：校验模型 id、revision、文件大小和 SHA-256。
+- `QwenTextOnlyEngine` / `QwenTextResult`：模型清单、全文件 SHA-256、装载、生成、停止、
+  性能统计、non-thinking 与 `vision_time == 0`；公开 API 只接收字符串。
+- `QwenSettings` / `QwenSettingsStore`：启停、安全策略、线程、Token、超时和额外规则；与
+  `VlmSettings` 完全分离，并归一化“明显错误修正/仅缺失时调用”的互斥关系。
+- `QwenComponentPrompt`：构造普通文本七键 JSON 请求，清除视觉标记并限长 OCR 证据；纠错
+  模式在 OCR 文本之后追加本地过滤的型号候选和最终硬规则，避免短上下文模型把品牌当型号。
+- `GlmInformationExtractionParser`：复用成熟的严格七键 JSON 清洗/解析；模型仍返回完整记录，
+  但 `QwenComponentEnricher` 逐字段与当前记录比较，不会直接整条覆盖。
+- `QwenComponentEnricher`：执行 fill-only、可选明显错误修正、已知非型号值硬拒绝、独立值证据、
+  字母数字格式与目录校验，返回接受/拒绝计数并在无修改时复用原记录。
+- 字段级 provenance 暂由 warning/识别日志承载；若后续需要审计持久化，再引入独立 decision 对象。
 
 ### 7.3 现有类的最小修改
 
@@ -439,7 +511,7 @@ text-only 运行而删除视觉文件，也不把 `llm_config.json` 中的 `is_v
 
 - 将固定 5 阶段日志改为事件式阶段名，例如“图像处理 / PP-OCR / 可选 GLM / 规则解析 /
   Qwen 补全 / 校验 / 模板生成”。
-- 在 PP/GLM 融合完成后计算缺失字段；无缺失则跳过 Qwen。
+- 在 PP/GLM 融合完成后计算缺失字段；默认仍实际调用并执行完整记录校验，用户开启“仅缺失时调用”后才在无缺失时跳过。
 - 显示“补全 1 项：封装=0806（OCR+立创目录）”或“Qwen 未采纳：无证据”，不展示思考过程。
 - 设置页增加第 4 节预设、模型状态和独立超时；保留 PP-only 一键回退。
 - Qwen 完成前不生成模板，完成/跳过/失败后只生成一次。
@@ -458,7 +530,7 @@ text-only 运行而删除视觉文件，也不把 `llm_config.json` 中的 `is_v
 
 ### 阶段 6：灰度与发布
 
-- 首个版本保持 Qwen 可关闭、只补空字段且默认不允许无证据推断。
+- 首个版本保持 Qwen 可关闭、默认只补空字段且始终不允许无证据推断；有证据纠错必须由用户显式开启。
 - 发布前按 `eprint-release-versioning` 更新版本、README、构建信息和 APK。
 - 校验单测、Lint、assembleDebug、16 KB page alignment、无 `INTERNET` 权限和模型未误入 APK。
 - 保留旧配置迁移与模型目录兼容；发现问题可只关闭 Qwen，不回滚 PP-OCR/目录改进。
@@ -495,10 +567,10 @@ text-only 运行而删除视觉文件，也不把 `llm_config.json` 中的 `is_v
 
 ### 12.1 JVM 单测
 
-- `QwenCompletionRequestTest`
-- `QwenCompletionResponseParserTest`
-- `QwenCompletionValidatorTest`
-- `QwenCompletionApplierTest`
+- `QwenSettingsAndPromptTest`
+- `QwenTextOnlyEngineTest`
+- `QwenComponentEnricherTest`
+- `LabelConfigUiStateTest`：锁定“明显错误修正”与“仅缺失时调用”的互斥状态
 - `CategoryPackageMatcherTest` 增加候选排序和目录成员验证
 - `RecognitionSettingsTest` 增加旧配置迁移和四种预设
 - `ComponentRecord` 最终模板字段兼容性回归
@@ -523,7 +595,7 @@ text-only 运行而删除视觉文件，也不把 `llm_config.json` 中的 `is_v
 1. 图中明确有 `0806`，规则因版式漏掉，Qwen 从 OCR 行补入且目录验证通过；
 2. `0806` 出现在型号内部但不是独立行，Qwen patch 被拒绝；
 3. 贴片电阻品类给出目录不允许的 `0806`，拒绝；
-4. 完整记录无需 Qwen，直接生成模板；
+4. 默认 fill-only 且开启“仅缺失时调用”时，完整记录跳过 Qwen；开启明显错误修正时仍进入校验；
 5. 只有 PP-OCR，无 GLM，Qwen 正常补全；
 6. PP 与 GLM 冲突，先按现有规则融合，Qwen 不覆盖非空结果；
 7. 模型不存在/损坏/超时，仍用 PP 结果生成模板；
@@ -532,6 +604,8 @@ text-only 运行而删除视觉文件，也不把 `llm_config.json` 中的 `is_v
 10. 反光抑制和单位后空格仍只各执行一次。
 11. Qwen 只走 text-only 文本路径；不向 native 传入图片、`<img>` 或视觉 token，且
     `vision_time == 0`。
+12. 型号误取内部编码时，仅在用户开启修正、真实型号位于独立 OCR 行且通过格式门禁时改写；
+    品牌、品类、规格、封装等非型号提议必须拒绝。
 
 ## 13. 风险、缓解与停止条件
 
@@ -539,7 +613,7 @@ text-only 运行而删除视觉文件，也不把 `llm_config.json` 中的 `is_v
 |---|---|---|
 | 当前 MNN 3.6.1 预编译库与 Qwen3.5 包不兼容 | 先独立冒烟；必要时受控升级 MNN | 连续 crash、模板错误或无法中止时停止业务接入 |
 | 2B JSON 不稳定/分类能力不足 | non-thinking、短 schema、一次修复、2B/4B 对照 | 补全精确率 <98% 时不自动写入 |
-| 模型幻觉 | fill-only、证据复核、目录成员校验、abstain | 任一无证据值通过 validator 即阻断发布 |
+| 模型幻觉 | fill-only、显式纠错开关、已知非型号值硬拒绝、独立 OCR 证据、格式/目录校验、abstain | 任一无证据值或其他语义字段通过 validator 即阻断发布 |
 | 视觉塔增加包体和内存 | 首期保留官方完整快照，但 Qwen 只走普通文本 API；分别测量 load/response 阶段的视觉权重映射与 PSS | `vision_time != 0`、视觉路径被调用，或无法接受的视觉权重常驻且没有官方 text-only 方案时停止发布 |
 | GLM 与 Qwen 同时驻留导致 LMK | 识别预设、互斥资源协调、顺序释放 | 内存无法稳定回落时禁用“实验全链” |
 | 全目录进入 prompt 导致时延/干扰 | 本地规则先筛 Top-K，目录只做校验 | 单请求不允许携带完整目录 |
@@ -553,23 +627,27 @@ text-only 运行而删除视觉文件，也不把 `llm_config.json` 中的 `is_v
 - 不联网查询立创商品详情、价格、库存或数据手册；
 - 不把模型权重打进 APK，也不在 App 内在线下载；
 - 不训练/微调 LoRA，先验证原始官方 instruct 模型与严格校验链路；
-- 不允许 Qwen 自动覆盖已识别字段；
+- 默认不允许 Qwen 自动覆盖已识别字段；只有用户显式开启明显错误修正、当前值可证明错误且候选值通过独立 OCR、格式与目录门禁时才允许；
 - 不把模型思考过程展示、保存或写进模板；
-- 不在本计划阶段构建 APK、连接 ADB 或向设备推送模型。
+- v1.5.38 只完成模型部署与自检；v1.5.40 开放自动 fill-only 补全；v1.5.41 已开放默认关闭的明显错误修正并完成真机模型校验。
 
-## 15. 实施前的最终检查表
+## 15. 实施与后续评估检查表
 
 - [ ] 基准数据集和字段 GT 已冻结
-- [ ] 官方模型 id、revision、许可证和 SHA-256 已记录
-- [ ] 当前 MNN 二进制在目标机通过 Qwen3.5 2B 连续冒烟
-- [ ] Qwen3.5 2B 只走普通文本 API，`vision_time == 0` 且未生成图片输入
-- [ ] load 阶段是否映射视觉权重已有 native PSS/日志证据；若仍加载，文档和 UI 未宣称“视觉权重未加载”
-- [ ] non-thinking 与结束 token 行为已验证
-- [ ] fill-only、证据校验、目录校验已用纯 JVM 测试锁定
+- [x] 官方模型 id、revision、许可证和 SHA-256 已记录
+- [x] 当前 MNN 二进制在目标机通过 Qwen3.5 2B 连续冒烟
+- [x] Qwen3.5 2B 只走普通文本 API，`vision_time == 0` 且未生成图片输入
+- [x] load/response 阶段已有 PSS、maps 与 native 日志；maps 不能区分匿名权重来源，因此文档和 UI 未宣称“视觉权重未加载”
+- [x] non-thinking 与结束 token 行为已验证
+- [x] fill-only、证据校验、独立值证据与目录校验已用纯 JVM 测试锁定
+- [x] 明显错误修正的开关互斥、现值错误判定、非型号值拒绝和真机 2B 改写已验证
 - [ ] 模型资源互斥策略已验证不会触发 LMK
 - [ ] 0.8B/2B/4B 使用同一数据集完成对照
 - [ ] 最终模型型号由第 11 节门槛选出
 - [ ] Qwen 关闭/缺失/失败时 PP-only 输出 100% 不回归
-- [ ] 实施时再按版本发布流程更新版本号、README、测试和 APK
+- [x] v1.5.40 已接入真实“拍摄识别”，Qwen 调用/耗时/`vision_time=0` 在 UI 与 native 日志可审计
+- [x] v1.5.41 Qwen 独立配置与折叠 UI 已通过真机检查，测试偏好已恢复
+- [x] v1.5.41 已按版本发布流程更新版本号、README、测试、构建信息和 APK
 
-在这些检查项完成前，不应把“模型能返回 JSON”等同于“Qwen3.5 已可安全自动填入标签”。
+v1.5.41 已达到现场 Debug 版的安全调用与显式纠错边界；未完成项仍是生产质量数据集、模型档位对照、
+GLM+Qwen 长循环内存与 PP-only 100% 基准评测，不能由单张真机样例外推量产指标。

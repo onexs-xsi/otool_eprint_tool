@@ -267,7 +267,7 @@ public final class EmbeddedScannerController {
 
     public void requestScan() {
         if (!host.recognitionSettings().isModeEnabled(scanInputMode)) {
-            toast(scanInputMode.label + "识别已在模型配置中关闭");
+            toast(scanInputMode.label + "识别已在识别配置中关闭");
             return;
         }
         if (scanInputMode == ScanInputMode.LABEL) {
