@@ -66,7 +66,8 @@
 
 ### 仍需保留的边界
 
-- 服务器拒绝了一个已知历史提交的按 SHA 抓取，远程可枚举引用也无额外分支或标签；这不证明 GitHub 的网页缓存、隐藏引用、fork、Actions 缓存或他人克隆全部清除。公开前应核查有权限的仓库页面与平台侧残留，必要时按 [GitHub 敏感数据移除流程](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/removing-sensitive-data-from-a-repository) 处理。工具未取得仓库管理 API 权限，因此未将这些平台资源记为“已全部检查”。
+- **已确认的公开阻断项：平台旧对象仍可取回。** 服务器拒绝了一个较早历史提交的按 SHA 抓取；但最终同步后，此前 `main` 的旧提交仍能通过已知 SHA、以认证方式抓取，且保留原个人邮箱和现场设备标识。该对象不在远程可枚举分支/标签中，说明仅清理这些引用还不够。本次没有公开旧 SHA 或敏感值，取回的探测副本仅存于本地忽略目录。
+- 公开前应通过有权限的仓库页面及 [GitHub 敏感数据移除流程](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/removing-sensitive-data-from-a-repository) 处理并复核这些旧对象。网页缓存、隐藏引用、fork、Actions 缓存或他人克隆也不能由当前检查排除。工具未取得仓库管理 API 权限，不能自行执行平台清除；已准备本地私有处理草稿，尚未向 GitHub 或任何第三方发送请求。GitHub 是否接受并清除须由其按政策判定，在残留处理完成前保持私有。
 - 未确认再分发权的目录数据继续排除；厂商独立协议实现的来源依据仍是维护者陈述及实现/测试记录。模式扫描不能替代所有权证明，也不能保证识别任意编码的秘密。
 - OpenCV 二进制自报 `4.10.0-dirty`；Halide 原始导入 revision、部分 MNN 静态组件的确切编译输入未能复原。本轮补齐已识别的许可与声明，未声称已完整证明所有 native 内部依赖的权利链。将来分发 APK 或替换库时，应针对具体产物再次核对 assets 中的 NOTICE 与适用许可。
 - 仓库继续保持私有。上述技术复核与整改完成不等于执行公开，也不创建版本发布。
