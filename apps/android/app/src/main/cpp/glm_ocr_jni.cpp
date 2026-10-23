@@ -1,3 +1,7 @@
+// Copyright Alibaba Group Holding Limited.
+// Portions adapted from MNN 3.6.1 MnnLlmChat, licensed under Apache-2.0.
+// EPrint modifications: session trimming, streaming/error metrics and cancellation recovery.
+// See third_party/licenses/MNN-3.6.1.txt and THIRD_PARTY_NOTICES.md.
 //
 // glm_ocr_jni.cpp — GLM-OCR / Qwen text-only 共用的 MNN-LLM 薄 JNI wrapper。
 //

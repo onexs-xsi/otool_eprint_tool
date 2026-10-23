@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build the offline LCSC category/brand/package catalog used by EPrint.
 
-The script reads the committed electronic leaf-category snapshot, calls the
+The script reads a user-provided electronic leaf-category snapshot, calls the
 public category parameter endpoint with conservative throttling, and writes a
 compact, deterministic Android asset. A small per-category cache makes the job
 resumable without retaining product records or other unrelated data.
@@ -303,6 +303,11 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    if not args.categories.is_file():
+        raise SystemExit(
+            "Category snapshot is not distributed with the source. Supply an "
+            "authorized local snapshot using --categories; see docs/BUILDING.md."
+        )
     category_snapshot = json.loads(args.categories.read_text(encoding="utf-8"))
     categories = list(category_snapshot.get("categories") or [])
     if not categories:

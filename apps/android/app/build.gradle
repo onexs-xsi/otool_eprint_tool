@@ -55,6 +55,11 @@ android {
     buildFeatures {
         buildConfig true
     }
+
+    // Preserve upstream notices when developers build their own APK.
+    sourceSets {
+        main.assets.srcDir(rootProject.file('../../third_party'))
+    }
 }
 
 dependencies {

@@ -1,0 +1,83 @@
+{
+  "schemaVersion": 1,
+  "modelId": "taobao-mnn/Qwen3.5-2B-MNN",
+  "revision": "35781816d7b6a9dcb273a6765ac9563401951c3c",
+  "sourceMirror": "MNN/Qwen3.5-2B-MNN",
+  "quantization": "4-bit MNN",
+  "license": "Apache-2.0",
+  "input_mode": "text-only",
+  "vision_input": "forbidden",
+  "multimodal_prompt": "disabled",
+  "require_vision_time_us": 0,
+  "visual_weights_load_policy": "measure_and_report",
+  "runtime": {
+    "mnn": "3.6.1 prebuilt Android arm64-v8a",
+    "backend": "cpu",
+    "threads": 4,
+    "precision": "low",
+    "memory": "low",
+    "enable_thinking": false
+  },
+  "files": [
+    {
+      "path": ".gitattributes",
+      "bytes": 1642,
+      "sha256": "200966173edc40adcf63cfc6b016dad6bd8a8447893ec636a914363d188d8f82"
+    },
+    {
+      "path": "README.md",
+      "bytes": 1171,
+      "sha256": "d484d35e51037538596096a34bc32e9918978fed1589e506e346c147581d0d72"
+    },
+    {
+      "path": "config.json",
+      "bytes": 652,
+      "sha256": "92853033efe602f95efca3e1c05cd8b108f973c8beed417843a9671f8147ed8d"
+    },
+    {
+      "path": "export_args.json",
+      "bytes": 1040,
+      "sha256": "a5b3a7d2c45e53c887e539259696d5fcec793637c9a3e9fbc7cd0dd008af6a87"
+    },
+    {
+      "path": "llm.mnn",
+      "bytes": 2148136,
+      "sha256": "23df98f8b341b277365e0bbca025c1d192939e3d32d7f79776352c6f32e77960"
+    },
+    {
+      "path": "llm.mnn.json",
+      "bytes": 5344018,
+      "sha256": "7131ff4f1a441add1039d371815ad94652ae6801f579591cb2f9ad90b5954025"
+    },
+    {
+      "path": "llm.mnn.weight",
+      "bytes": 1176647702,
+      "sha256": "c93f71a2dbecf9328782bd38861656d8faa82e95e7f99607350074768a482054"
+    },
+    {
+      "path": "llm_config.json",
+      "bytes": 8692,
+      "sha256": "a88234b36c2af0eff8e5c89667011badf71c15e30459eb0e21030a8f3f9ed240"
+    },
+    {
+      "path": "tokenizer.txt",
+      "bytes": 6465727,
+      "sha256": "7e75de1f279a10b65bd9dc1a5207205cb8993823861c4c42bbbd74e48e1c23a4"
+    },
+    {
+      "path": "visual.mnn",
+      "bytes": 488096,
+      "sha256": "88fc40a7b676e90eb2cb86d854db15cb90b9eb1f34087ab0f48c5e43572c8dac"
+    },
+    {
+      "path": "visual.mnn.weight",
+      "bytes": 195587264,
+      "sha256": "8f90e106f5b9ae9a939faed240305cfdd5c6740ae91d3fc418a990bee0cce36b"
+    }
+  ],
+  "deploymentConfig": {
+    "path": "config-text-only.json",
+    "bytes": 460,
+    "sha256": "407eff87907dee8b0ceab22f27cf54b533a69a3ae218c2552bbac3d4ee11e64e"
+  }
+}

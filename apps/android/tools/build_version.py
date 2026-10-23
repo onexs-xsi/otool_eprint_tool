@@ -19,6 +19,7 @@ import re
 import shutil
 import subprocess
 import sys
+import platform
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -30,9 +31,17 @@ TEST_RESULTS = ANDROID_DIR / "app" / "build" / "test-results" / "testDebugUnitTe
 ARTIFACTS = ROOT / "artifacts"
 
 TOOLS = ROOT / ".tools"
-JAVA_HOME = TOOLS / "jdk-21" / "PFiles64" / "Microsoft" / "jdk-21.0.12.8-hotspot"
-ANDROID_HOME = TOOLS / "android-sdk"
-GRADLE = TOOLS / "gradle" / "gradle-8.14.3" / "bin" / ("gradle.bat" if os.name == "nt" else "gradle")
+LOCAL_JDK = TOOLS / "jdk-21" / "PFiles64" / "Microsoft" / "jdk-21.0.12.8-hotspot"
+java_on_path = shutil.which("java")
+JAVA_HOME = Path(os.environ["JAVA_HOME"]) if os.environ.get("JAVA_HOME") else (
+    LOCAL_JDK if LOCAL_JDK.is_dir() else
+    Path(java_on_path).resolve().parent.parent if java_on_path else Path("__missing_jdk__"))
+sdk_default = (Path(os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData/Local"))) / "Android/Sdk"
+               if os.name == "nt" else
+               Path.home() / ("Library/Android/sdk" if platform.system() == "Darwin" else "Android/Sdk"))
+ANDROID_HOME = Path(os.environ.get("ANDROID_HOME") or os.environ.get("ANDROID_SDK_ROOT") or
+                    (str(TOOLS / "android-sdk") if (TOOLS / "android-sdk").is_dir() else str(sdk_default)))
+GRADLE = ANDROID_DIR / ("gradlew.bat" if os.name == "nt" else "gradlew")
 
 VERSION_CODE_RE = re.compile(r"^(\s*)versionCode\s+(\d+)\s*$", re.MULTILINE)
 VERSION_NAME_RE = re.compile(r"^(\s*)versionName\s+'(\d+)\.(\d+)\.(\d+)'\s*$", re.MULTILINE)
@@ -146,7 +155,16 @@ def main():
                         help="不升版本号（上次构建失败重跑时使用）")
     parser.add_argument("--skip-tests", action="store_true", help="跳过单元测试")
     parser.add_argument("--skip-lint", action="store_true", help="跳过 Lint")
+    parser.add_argument("--check-tools", action="store_true", help="仅检查工具路径，不修改版本或构建")
     args = parser.parse_args()
+    if args.check_tools:
+        java_executable = JAVA_HOME / "bin" / ("java.exe" if os.name == "nt" else "java")
+        for name, path in (("JAVA_HOME", java_executable), ("ANDROID_HOME", ANDROID_HOME),
+                           ("Gradle Wrapper", GRADLE)):
+            if not path.exists():
+                sys.exit(f"{name} 不存在：{path}；参见 docs/BUILDING.md")
+            print(f"{name}: {path}")
+        return
     if args.no_bump:
         text = GRADLE_FILE.read_text(encoding="utf-8")
         name = VERSION_NAME_RE.search(text).group(2, 3, 4)

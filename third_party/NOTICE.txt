@@ -1,0 +1,32 @@
+EPrint third-party acknowledgements
+
+The project MIT license does not replace the licenses of these components.
+This notice and the licenses/ directory are included in locally built APK assets.
+The full inventory is in THIRD_PARTY_NOTICES.md in the source repository.
+
+MNN 3.6.1, including MNN Express, MNN LLM, headers and the JNI implementation reference:
+Copyright Alibaba Group Holding Limited. Apache License 2.0.
+https://github.com/alibaba/MNN/tree/3.6.1
+EPrint modifies the JNI session wrapper, streaming, cancellation and metrics.
+MNN third-party components retain their own copyright and license notices.
+
+JSON for Modern C++ 3.11.3:
+Copyright (c) 2013-2023 Niels Lohmann. MIT License.
+https://github.com/nlohmann/json/tree/v3.11.3
+
+LLVM libc++ runtime supplied with MNN:
+Apache License 2.0 with LLVM Exceptions and the notices in LLVM-libcxx.txt.
+
+PaddleOCR models and RapidOCR model conversion/reference implementation:
+Copyright PaddlePaddle Authors and RapidOCR Authors. Apache License 2.0.
+https://github.com/PaddlePaddle/PaddleOCR
+https://github.com/RapidAI/RapidOCR
+
+AndroidX and AndroidX Test: The Android Open Source Project. Apache License 2.0.
+ZXing and ZXing Android Embedded: ZXing Authors and Journey Mobile / JourneyApps.
+Apache License 2.0; see the corresponding license files for additional notices.
+ONNX Runtime: Copyright Microsoft Corporation. MIT License and ThirdPartyNotices.
+OpenCV: Copyright OpenCV contributors. Apache License 2.0 and component notices.
+
+Test-only dependencies, including JUnit, Hamcrest and JSON-java, retain their
+own licenses and are not app runtime components; see dependencies.json.

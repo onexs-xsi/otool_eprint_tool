@@ -45,7 +45,8 @@ public final class DeviceCatalogTest {
                 "0000FF02-0000-1000-8000-00805F9B34FB")));
         assertFalse(profile.preferredBleWrites.contains(UUID.fromString(
                 "0000FF01-0000-1000-8000-00805F9B34FB")));
-        assertFalse(profile.useDefaultDothanAuth);
+        assertTrue(profile.helloTokenHex.isEmpty());
+        assertTrue(profile.loginTokenHex.isEmpty());
         assertFalse(profile.applyDothanExtras);
     }
 }

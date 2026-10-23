@@ -877,7 +877,7 @@ public final class MainActivity extends AppCompatActivity {
                 + " · 电机 " + selectedProfile.motorMode
                 + " · 语言 " + selectedProfile.language
                 + (selectedProfile.helloTokenHex.trim().isEmpty()
-                ? (selectedProfile.useDefaultDothanAuth ? " · 默认离线授权已启用" : " · 授权关闭")
+                ? " · 授权关闭"
                 : " · 自定义授权已启用")
                 + (selectedProfile.applyDothanExtras ? " · 实验参数下发已启用" : "") : ""));
         updateCompatibilityWarning();

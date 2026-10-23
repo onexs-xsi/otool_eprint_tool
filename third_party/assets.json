@@ -1,0 +1,344 @@
+{
+  "schemaVersion": 1,
+  "verifiedOn": "2026-10-24",
+  "scope": "Bundled files; excludes private catalogs and optional external model weights",
+  "nativeArchive": {
+    "source": "https://github.com/alibaba/MNN/releases/tag/3.6.1",
+    "sha256": "46dc7e86d45b8d4e957db81d2603e0b7f6c9ce9b84092ffdcee1b843cbfc9d71"
+  },
+  "files": [
+    {
+      "path": "apps/android/app/src/main/jniLibs/arm64-v8a/libc++_shared.so",
+      "component": "LLVM libc++ (MNN distribution)",
+      "version": "3.6.1 distribution",
+      "license": "Apache-2.0 WITH LLVM-exception",
+      "source": "https://github.com/alibaba/MNN/releases/tag/3.6.1",
+      "bytes": 1794776,
+      "sha256": "f9992c4ba6b7c5a716e3a202fceb1ce029d6a2b0605838ac6b3219f489dd7970"
+    },
+    {
+      "path": "apps/android/app/src/main/jniLibs/arm64-v8a/libllm.so",
+      "component": "MNN",
+      "version": "3.6.1 distribution",
+      "license": "Apache-2.0",
+      "source": "https://github.com/alibaba/MNN/releases/tag/3.6.1",
+      "bytes": 1257992,
+      "sha256": "196691b8503a62cafeec69486877e371b6454db812ec10dd608cbfcb4c8a95b3"
+    },
+    {
+      "path": "apps/android/app/src/main/jniLibs/arm64-v8a/libMNN.so",
+      "component": "MNN",
+      "version": "3.6.1 distribution",
+      "license": "Apache-2.0",
+      "source": "https://github.com/alibaba/MNN/releases/tag/3.6.1",
+      "bytes": 2452856,
+      "sha256": "c91fb9e65ef45477406583cf374978c61713318893f6af473aecdafed4c17f60"
+    },
+    {
+      "path": "apps/android/app/src/main/jniLibs/arm64-v8a/libMNN_CL.so",
+      "component": "MNN",
+      "version": "3.6.1 distribution",
+      "license": "Apache-2.0",
+      "source": "https://github.com/alibaba/MNN/releases/tag/3.6.1",
+      "bytes": 2308576,
+      "sha256": "5293b0405a76f2fd824601c47ea5892e051235fb7c316851cabaec6a07aab184"
+    },
+    {
+      "path": "apps/android/app/src/main/jniLibs/arm64-v8a/libMNN_Express.so",
+      "component": "MNN",
+      "version": "3.6.1 distribution",
+      "license": "Apache-2.0",
+      "source": "https://github.com/alibaba/MNN/releases/tag/3.6.1",
+      "bytes": 754912,
+      "sha256": "9ca5408083d241b4aa63f69194d845615b3fc5ed83bd47fce90c820b22093b69"
+    },
+    {
+      "path": "apps/android/app/src/main/jniLibs/arm64-v8a/libMNN_Vulkan.so",
+      "component": "MNN",
+      "version": "3.6.1 distribution",
+      "license": "Apache-2.0",
+      "source": "https://github.com/alibaba/MNN/releases/tag/3.6.1",
+      "bytes": 780288,
+      "sha256": "fa6da2438d8d09b1f0d861e578492120bb13fc384b76c845d3181f853a493462"
+    },
+    {
+      "path": "apps/android/app/src/main/jniLibs/arm64-v8a/libMNNAudio.so",
+      "component": "MNN",
+      "version": "3.6.1 distribution",
+      "license": "Apache-2.0",
+      "source": "https://github.com/alibaba/MNN/releases/tag/3.6.1",
+      "bytes": 71400,
+      "sha256": "9155a681c3595b25be1c7275db25d54efc08d4fa9d2a0d066bbb8f43709a34bc"
+    },
+    {
+      "path": "apps/android/app/src/main/jniLibs/arm64-v8a/libMNNOpenCV.so",
+      "component": "MNN",
+      "version": "3.6.1 distribution",
+      "license": "Apache-2.0",
+      "source": "https://github.com/alibaba/MNN/releases/tag/3.6.1",
+      "bytes": 264424,
+      "sha256": "89e3dd3672368780241cfd9066fb81a052c2391e263adc67c701a8a3cf549315"
+    },
+    {
+      "path": "apps/android/app/src/main/assets/ocr/ch_PP-LCNet_x0_25_textline_ori_cls_mobile.onnx",
+      "component": "PaddleOCR via RapidOCR",
+      "version": "RapidOCR model mirror v3.9.2",
+      "license": "Apache-2.0",
+      "source": "https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.9.2/onnx/PP-OCRv5/cls/ch_PP-LCNet_x0_25_textline_ori_cls_mobile.onnx",
+      "bytes": 1018508,
+      "sha256": "54379ae5174d026780215fc748a7f31910dee36818e63d49e17dc598ecc82df7"
+    },
+    {
+      "path": "apps/android/app/src/main/assets/ocr/PP-OCRv6_det_small.onnx",
+      "component": "PaddleOCR via RapidOCR",
+      "version": "RapidOCR model mirror v3.9.2",
+      "license": "Apache-2.0",
+      "source": "https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.9.2/onnx/PP-OCRv6/det/PP-OCRv6_det_small.onnx",
+      "bytes": 9929594,
+      "sha256": "090f04abcd9d9a7498bc4ebf677e4cb9bdce1fe4197ddb7e529f1ef44e1ff94f"
+    },
+    {
+      "path": "apps/android/app/src/main/assets/ocr/PP-OCRv6_rec_small.onnx",
+      "component": "PaddleOCR via RapidOCR",
+      "version": "RapidOCR model mirror v3.9.2",
+      "license": "Apache-2.0",
+      "source": "https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.9.2/onnx/PP-OCRv6/rec/PP-OCRv6_rec_small.onnx",
+      "bytes": 21234383,
+      "sha256": "6f327246b50388f3c176ae304bd95767ea6dc0c9ae92153ef8cbe210b3c14884"
+    },
+    {
+      "path": "apps/android/app/src/main/assets/ocr/ppocrv6_dict.txt",
+      "component": "PaddleOCR via RapidOCR",
+      "version": "RapidOCR model mirror v3.9.2",
+      "license": "Apache-2.0",
+      "source": "https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.9.2/paddle/PP-OCRv6/rec/PP-OCRv6_rec_small/ppocrv6_dict.txt",
+      "bytes": 74947,
+      "sha256": "b5f2bfe2bdd9448429e3e82b51c789775d9b42f2403d082b00662eb77e401c5d"
+    },
+    {
+      "path": "apps/android/app/src/main/cpp/include/llm/llm.hpp",
+      "component": "MNN headers",
+      "version": "3.6.1",
+      "license": "Apache-2.0",
+      "source": "https://github.com/alibaba/MNN/tree/3.6.1",
+      "bytes": 11142,
+      "sha256": "a9f1cccfe827a623f9051284c3f957d527100dad0d053174ef63fc88fbe69556"
+    },
+    {
+      "path": "apps/android/app/src/main/cpp/include/MNN/AutoTime.hpp",
+      "component": "MNN headers",
+      "version": "3.6.1",
+      "license": "Apache-2.0",
+      "source": "https://github.com/alibaba/MNN/tree/3.6.1",
+      "bytes": 1303,
+      "sha256": "d5df4db8ac56a5a2634f6632401cef2a2d2aaadfd1b0b13a8c6f04f81335f004"
+    },
+    {
+      "path": "apps/android/app/src/main/cpp/include/MNN/ErrorCode.hpp",
+      "component": "MNN headers",
+      "version": "3.6.1",
+      "license": "Apache-2.0",
+      "source": "https://github.com/alibaba/MNN/tree/3.6.1",
+      "bytes": 877,
+      "sha256": "de7d2290e4e2f024ae51707298c30721a283367eb90a7abac113d27248d56dd0"
+    },
+    {
+      "path": "apps/android/app/src/main/cpp/include/MNN/expr/Executor.hpp",
+      "component": "MNN headers",
+      "version": "3.6.1",
+      "license": "Apache-2.0",
+      "source": "https://github.com/alibaba/MNN/tree/3.6.1",
+      "bytes": 6263,
+      "sha256": "989545ffee9512229c87bd6f4fae3f617e30870018ff8d649e57f296744abd64"
+    },
+    {
+      "path": "apps/android/app/src/main/cpp/include/MNN/expr/ExecutorScope.hpp",
+      "component": "MNN headers",
+      "version": "3.6.1",
+      "license": "Apache-2.0",
+      "source": "https://github.com/alibaba/MNN/tree/3.6.1",
+      "bytes": 783,
+      "sha256": "a7132e5e98cf1a5db9e5e2f22fbf2d940d484a0e73b6d30b00913c13e113e2ab"
+    },
+    {
+      "path": "apps/android/app/src/main/cpp/include/MNN/expr/Expr.hpp",
+      "component": "MNN headers",
+      "version": "3.6.1",
+      "license": "Apache-2.0",
+      "source": "https://github.com/alibaba/MNN/tree/3.6.1",
+      "bytes": 7717,
+      "sha256": "61731668921de87770fc703c4675995c8f92103677432c78768481fa346f072b"
+    },
+    {
+      "path": "apps/android/app/src/main/cpp/include/MNN/expr/ExprCreator.hpp",
+      "component": "MNN headers",
+      "version": "3.6.1",
+      "license": "Apache-2.0",
+      "source": "https://github.com/alibaba/MNN/tree/3.6.1",
+      "bytes": 290,
+      "sha256": "853120410621ffad5fa47bc50732674d009e40aa3b5205bd4426baa1b0835f17"
+    },
+    {
+      "path": "apps/android/app/src/main/cpp/include/MNN/expr/MathOp.hpp",
+      "component": "MNN headers",
+      "version": "3.6.1",
+      "license": "Apache-2.0",
+      "source": "https://github.com/alibaba/MNN/tree/3.6.1",
+      "bytes": 7585,
+      "sha256": "893bce404a402d02986ee6e8d7212bc7ffc804d052c6adf0b1cd1e2032491879"
+    },
+    {
+      "path": "apps/android/app/src/main/cpp/include/MNN/expr/Module.hpp",
+      "component": "MNN headers",
+      "version": "3.6.1",
+      "license": "Apache-2.0",
+      "source": "https://github.com/alibaba/MNN/tree/3.6.1",
+      "bytes": 5114,
+      "sha256": "259f3a72d89333107acfaef97e4fc92f421afebecb7e0e868d22fc15f595c32d"
+    },
+    {
+      "path": "apps/android/app/src/main/cpp/include/MNN/expr/NeuralNetWorkOp.hpp",
+      "component": "MNN headers",
+      "version": "3.6.1",
+      "license": "Apache-2.0",
+      "source": "https://github.com/alibaba/MNN/tree/3.6.1",
+      "bytes": 11648,
+      "sha256": "8319e2a61ce0ce0dcca93298a34f89fde69438aa8804a2d21eed05fa02e55687"
+    },
+    {
+      "path": "apps/android/app/src/main/cpp/include/MNN/expr/Optimizer.hpp",
+      "component": "MNN headers",
+      "version": "3.6.1",
+      "license": "Apache-2.0",
+      "source": "https://github.com/alibaba/MNN/tree/3.6.1",
+      "bytes": 1615,
+      "sha256": "88a674fe723ca80c3d5e38979178d47eb156310772ade0fcc291dd2e38a4f03b"
+    },
+    {
+      "path": "apps/android/app/src/main/cpp/include/MNN/expr/Scope.hpp",
+      "component": "MNN headers",
+      "version": "3.6.1",
+      "license": "Apache-2.0",
+      "source": "https://github.com/alibaba/MNN/tree/3.6.1",
+      "bytes": 2692,
+      "sha256": "32556d33c702215c3185e373507b71a8087d29363326cb140cf273bedecdaa7c"
+    },
+    {
+      "path": "apps/android/app/src/main/cpp/include/MNN/HalideRuntime.h",
+      "component": "MNN headers",
+      "version": "3.6.1",
+      "license": "Apache-2.0",
+      "source": "https://github.com/alibaba/MNN/tree/3.6.1",
+      "bytes": 11476,
+      "sha256": "f1d35170fa3fc1c7433ca1d18ca5d016ad230f26a0ecfba91b9a7ef9a49f7a37"
+    },
+    {
+      "path": "apps/android/app/src/main/cpp/include/MNN/ImageProcess.hpp",
+      "component": "MNN headers",
+      "version": "3.6.1",
+      "license": "Apache-2.0",
+      "source": "https://github.com/alibaba/MNN/tree/3.6.1",
+      "bytes": 5648,
+      "sha256": "206f4ff03f84895ffc14d3b0cb498a8c91467b9198196bb42fc41fe707fbb4cb"
+    },
+    {
+      "path": "apps/android/app/src/main/cpp/include/MNN/Interpreter.hpp",
+      "component": "MNN headers",
+      "version": "3.6.1",
+      "license": "Apache-2.0",
+      "source": "https://github.com/alibaba/MNN/tree/3.6.1",
+      "bytes": 18728,
+      "sha256": "0c367286c5906572218ddfa6426007ca748cbf5433f6cd7c7c71ae3300b1f986"
+    },
+    {
+      "path": "apps/android/app/src/main/cpp/include/MNN/Matrix.h",
+      "component": "MNN headers",
+      "version": "3.6.1",
+      "license": "Apache-2.0",
+      "source": "https://github.com/alibaba/MNN/tree/3.6.1",
+      "bytes": 55948,
+      "sha256": "4becb851c912f987b895b08c0b10743f107430c8552a34da9bac3c447c692d1e"
+    },
+    {
+      "path": "apps/android/app/src/main/cpp/include/MNN/MNNDefine.h",
+      "component": "MNN headers",
+      "version": "3.6.1",
+      "license": "Apache-2.0",
+      "source": "https://github.com/alibaba/MNN/tree/3.6.1",
+      "bytes": 2827,
+      "sha256": "481f2ff7a4dd29ce779384b8f5169c8b1aee8ebd8f0a9ca4c2f8444de45f9b6f"
+    },
+    {
+      "path": "apps/android/app/src/main/cpp/include/MNN/MNNForwardType.h",
+      "component": "MNN headers",
+      "version": "3.6.1",
+      "license": "Apache-2.0",
+      "source": "https://github.com/alibaba/MNN/tree/3.6.1",
+      "bytes": 4623,
+      "sha256": "b9c670a78f3ec42c81328429004fdd6c3ff1a172a52373dd09945a678e5ea167"
+    },
+    {
+      "path": "apps/android/app/src/main/cpp/include/MNN/MNNSharedContext.h",
+      "component": "MNN headers",
+      "version": "3.6.1",
+      "license": "Apache-2.0",
+      "source": "https://github.com/alibaba/MNN/tree/3.6.1",
+      "bytes": 1494,
+      "sha256": "11233f00bf63d1336925ab5a563255ffb996590b064db9c20dae0a40de970978"
+    },
+    {
+      "path": "apps/android/app/src/main/cpp/include/MNN/plugin/PluginContext.hpp",
+      "component": "MNN headers",
+      "version": "3.6.1",
+      "license": "Apache-2.0",
+      "source": "https://github.com/alibaba/MNN/tree/3.6.1",
+      "bytes": 4146,
+      "sha256": "2b5185ec107e4b0166d521f79510e7939108fddbe5e0280357ba378c94e45b29"
+    },
+    {
+      "path": "apps/android/app/src/main/cpp/include/MNN/plugin/PluginKernel.hpp",
+      "component": "MNN headers",
+      "version": "3.6.1",
+      "license": "Apache-2.0",
+      "source": "https://github.com/alibaba/MNN/tree/3.6.1",
+      "bytes": 2235,
+      "sha256": "5100976ad3228dad2314b833d9f6b58761f24947d3912de544101ef9fd1a2135"
+    },
+    {
+      "path": "apps/android/app/src/main/cpp/include/MNN/plugin/PluginShapeInference.hpp",
+      "component": "MNN headers",
+      "version": "3.6.1",
+      "license": "Apache-2.0",
+      "source": "https://github.com/alibaba/MNN/tree/3.6.1",
+      "bytes": 1555,
+      "sha256": "c6a5268384916da6be3015c33db20e1dbd5a2fa1ce4400a44e099879953f13c2"
+    },
+    {
+      "path": "apps/android/app/src/main/cpp/include/MNN/Rect.h",
+      "component": "MNN headers",
+      "version": "3.6.1",
+      "license": "Apache-2.0",
+      "source": "https://github.com/alibaba/MNN/tree/3.6.1",
+      "bytes": 18903,
+      "sha256": "cec3ec954565d2e03bb749ac9513b53dae8b2389208b490d9cfa588b2eca1ea4"
+    },
+    {
+      "path": "apps/android/app/src/main/cpp/include/MNN/Tensor.hpp",
+      "component": "MNN headers",
+      "version": "3.6.1",
+      "license": "Apache-2.0",
+      "source": "https://github.com/alibaba/MNN/tree/3.6.1",
+      "bytes": 9381,
+      "sha256": "6f28b4d0338c6760582ed8d5632fa0c3691bdfacc421753b6d86407466a7bf5c"
+    },
+    {
+      "path": "apps/android/app/src/main/cpp/include/nlohmann/json.hpp",
+      "component": "nlohmann/json",
+      "version": "3.11.3",
+      "license": "MIT",
+      "source": "https://github.com/nlohmann/json/tree/v3.11.3",
+      "bytes": 919975,
+      "sha256": "9bea4c8066ef4a1c206b2be5a36302f8926f7fdc6087af5d20b417d0cf103ea6"
+    }
+  ]
+}

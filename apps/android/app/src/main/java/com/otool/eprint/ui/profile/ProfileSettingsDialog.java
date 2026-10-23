@@ -154,7 +154,6 @@ public final class ProfileSettingsDialog {
         form.addView(advanced);
 
         Spinner compression = null;
-        CheckBox defaultAuth = null;
         EditText helloToken = null;
         EditText loginToken = null;
         EditText motorMode = null;
@@ -180,10 +179,6 @@ public final class ProfileSettingsDialog {
             compression.setAdapter(compressionAdapter);
             compression.setSelection(profile.compression.ordinal());
             advanced.addView(compression);
-            defaultAuth = new CheckBox(activity);
-            defaultAuth.setText("无自定义令牌时使用内置离线授权（实验性，默认关闭）");
-            defaultAuth.setChecked(profile.useDefaultDothanAuth);
-            advanced.addView(defaultAuth);
             helloToken = addSettingField(activity, advanced, "自定义 helloToken（16 进制；留空表示不用自定义令牌）",
                     profile.helloTokenHex, false);
             loginToken = addSettingField(activity, advanced, "loginToken（16 进制，4 字节）",
@@ -249,7 +244,6 @@ public final class ProfileSettingsDialog {
             advancedToggle.setText(visible ? "展开高级设置" : "收起高级设置");
         });
         Spinner compressionView = compression;
-        CheckBox defaultAuthView = defaultAuth;
         EditText helloTokenView = helloToken;
         EditText loginTokenView = loginToken;
         EditText motorModeView = motorMode;
@@ -293,7 +287,6 @@ public final class ProfileSettingsDialog {
                         PrinterProfile effectiveProfile = p1Config
                                 ? customized.withDothanOptions(
                                         (DothanCompressionMode) compressionView.getSelectedItem(),
-                                        defaultAuthView.isChecked(),
                                         helloTokenView.getText().toString().trim(),
                                         loginTokenView.getText().toString().trim())
                                 .withDothanExtras(

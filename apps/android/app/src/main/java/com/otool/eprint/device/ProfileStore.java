@@ -46,8 +46,6 @@ public final class ProfileStore {
                     base.helloTokenHex);
             String loginToken = values.getString(prefix + "dothan_login_token",
                     base.loginTokenHex);
-            boolean defaultAuth = values.getBoolean(prefix + "dothan_default_auth",
-                    base.useDefaultDothanAuth);
             int motorMode = values.getInt(prefix + "dothan_motor_mode", base.motorMode);
             int language = values.getInt(prefix + "dothan_language", base.language);
             boolean applyExtras = values.getBoolean(prefix + "dothan_apply_extras",
@@ -62,7 +60,7 @@ public final class ProfileStore {
                     retries, threshold,
                     mergeUuids(base.preferredBleServiceStrings(), splitUuids(services)),
                     mergeUuids(base.preferredBleWriteStrings(), splitUuids(writes)))
-                    .withDothanOptions(compression, defaultAuth, helloToken, loginToken)
+                    .withDothanOptions(compression, helloToken, loginToken)
                     .withDothanExtras(motorMode, language, applyExtras);
             return hardware.withDeviceSettings(base.manufacturer, base.deviceType, density, speed,
                     paper, gap, values.getBoolean(prefix + "auto_feed", base.autoFeed),
@@ -93,7 +91,7 @@ public final class ProfileStore {
                 .putString(prefix + "dothan_compression", profile.compression.name())
                 .putString(prefix + "dothan_hello_token", profile.helloTokenHex)
                 .putString(prefix + "dothan_login_token", profile.loginTokenHex)
-                .putBoolean(prefix + "dothan_default_auth", profile.useDefaultDothanAuth)
+                .remove(prefix + "dothan_default_auth")
                 .putInt(prefix + "dothan_motor_mode", profile.motorMode)
                 .putInt(prefix + "dothan_language", profile.language)
                 .putBoolean(prefix + "dothan_apply_extras", profile.applyDothanExtras)
@@ -116,7 +114,7 @@ public final class ProfileStore {
                 .putString(prefix + "dothan_compression", profile.compression.name())
                 .putString(prefix + "dothan_hello_token", profile.helloTokenHex)
                 .putString(prefix + "dothan_login_token", profile.loginTokenHex)
-                .putBoolean(prefix + "dothan_default_auth", profile.useDefaultDothanAuth)
+                .remove(prefix + "dothan_default_auth")
                 .putInt(prefix + "dothan_motor_mode", profile.motorMode)
                 .putInt(prefix + "dothan_language", profile.language)
                 .putBoolean(prefix + "dothan_apply_extras", profile.applyDothanExtras)

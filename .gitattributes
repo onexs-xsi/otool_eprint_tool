@@ -1,0 +1,12 @@
+* text=auto
+
+# These upstream files and deployment templates are verified byte-for-byte.
+apps/android/app/src/main/assets/ocr/** -text
+apps/android/app/src/main/jniLibs/** -text
+apps/android/app/src/main/cpp/include/** -text
+tools/models/qwen3.5-2b-mnn/config-text-only.json -text
+third_party/licenses/** -text -whitespace
+
+# Keep the POSIX Gradle launcher usable after a Windows checkout.
+apps/android/gradlew text eol=lf
+*.bat text eol=crlf

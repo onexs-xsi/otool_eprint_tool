@@ -903,31 +903,18 @@ public final class PrinterConnectionService extends Service {
             failDothanJob(task, "P1 协议尚未就绪，未发送任何打印数据");
             return;
         }
-        byte[] helloToken;
-        byte[] loginToken;
-        boolean authRequired;
-        boolean hasUserToken = !job.profile.helloTokenHex.trim().isEmpty()
-                || !job.profile.loginTokenHex.trim().isEmpty();
-        if (hasUserToken) {
-            helloToken = parseHexToken(job.profile.helloTokenHex);
-            loginToken = parseHexToken(job.profile.loginTokenHex);
-            authRequired = helloToken != null && helloToken.length >= 4
-                    && loginToken != null && loginToken.length == 4;
-            if (!authRequired) {
-                failDothanJob(task, "P1 授权令牌格式无效：helloToken 至少 4 字节，loginToken 必须 4 字节；未发送任何数据");
-                return;
-            }
-        } else if (job.profile.useDefaultDothanAuth) {
-            int defaultIndex = DothanAuthHandshake.defaultPairIndex();
-            helloToken = DothanAuthHandshake.defaultHelloToken(defaultIndex);
-            loginToken = DothanAuthHandshake.defaultLoginToken(defaultIndex);
-            authRequired = true;
-            traceProtocol("AUTH using offline default pair " + defaultIndex);
-        } else {
-            helloToken = null;
-            loginToken = null;
-            authRequired = false;
+        DothanAuthHandshake.Credentials credentials;
+        try {
+            credentials = DothanAuthHandshake.fromUserConfiguration(
+                    job.profile.helloTokenHex, job.profile.loginTokenHex);
+        } catch (IllegalArgumentException invalidCredentials) {
+            failDothanJob(task, "P1 授权令牌格式无效：" + invalidCredentials.getMessage()
+                    + "；未发送任何数据");
+            return;
         }
+        boolean authRequired = credentials != null;
+        byte[] helloToken = authRequired ? credentials.helloToken() : null;
+        byte[] loginToken = authRequired ? credentials.expectedReply() : null;
         task.authRequired = authRequired;
         task.authVerified = !authRequired;
         dothanExpectedLoginToken = authRequired ? loginToken : null;
@@ -1393,21 +1380,6 @@ public final class PrinterConnectionService extends Service {
 
     private static String shortJob(PrintJob job) {
         return job.id.substring(0, Math.min(8, job.id.length()));
-    }
-
-    private static byte[] parseHexToken(String value) {
-        if (value == null) return null;
-        String cleaned = value.trim().replaceAll("[\\s:,]", "");
-        if (cleaned.isEmpty()) return null;
-        if ((cleaned.length() & 1) != 0) return null;
-        byte[] result = new byte[cleaned.length() / 2];
-        for (int index = 0; index < result.length; index++) {
-            int high = Character.digit(cleaned.charAt(index * 2), 16);
-            int low = Character.digit(cleaned.charAt(index * 2 + 1), 16);
-            if (high < 0 || low < 0) return null;
-            result[index] = (byte) ((high << 4) | low);
-        }
-        return result;
     }
 
     private static String receiptStatus(int status) {

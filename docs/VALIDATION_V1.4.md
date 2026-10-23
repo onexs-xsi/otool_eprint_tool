@@ -7,7 +7,7 @@
 | 项目 | 结果 |
 |---|---|
 | Android 主机 | Samsung SM-X800 / Android 14（API 34） |
-| 打印机 | P1-0009200000 / 德佟电子 / BLE `02:00:00:00:00:01` |
+| 打印机 | P1-现场测试机 / 德佟电子 / BLE `02:00:00:00:00:01` |
 | 标签 | 仅使用 25 × 15 mm 实纸 |
 | APK | versionCode 5 / versionName 1.4 |
 | JVM 自动测试 | 41 项通过，0 failure，0 error，0 skipped |

@@ -1,12 +1,18 @@
 @echo off
-rem 无线 ADB 连接 SM-X800（Galaxy Tab S8+，Android 14）。
-rem 注意：Android 无线调试端口每次开启会随机变化。
-rem 连接失败时，在平板上进入 开发者选项 -^> 无线调试 查看当前 IP:端口，
-rem 修改下方 ADB_TARGET 后重试；首次配对需先用 "adb pair IP:配对端口"。
-rem Git Bash 下执行 adb 命令时注意设 MSYS2_ARG_CONV_EXCL="*"，避免远端路径被改写。
 setlocal
-set ADB=%~dp0..\..\..\.tools\android-sdk\platform-tools\adb.exe
-set ADB_TARGET=DEVICE_IP:ADB_PORT
-"%ADB%" connect %ADB_TARGET%
-"%ADB%" devices
-endlocal
+rem Usage: adb_connect.bat [IP:PORT]. Without an endpoint, list devices only.
+set "EPRINT_ADB="
+if defined ANDROID_HOME if exist "%ANDROID_HOME%\platform-tools\adb.exe" set "EPRINT_ADB=%ANDROID_HOME%\platform-tools\adb.exe"
+if not defined EPRINT_ADB if defined ANDROID_SDK_ROOT if exist "%ANDROID_SDK_ROOT%\platform-tools\adb.exe" set "EPRINT_ADB=%ANDROID_SDK_ROOT%\platform-tools\adb.exe"
+if not defined EPRINT_ADB for %%I in (adb.exe) do set "EPRINT_ADB=%%~$PATH:I"
+if not defined EPRINT_ADB if exist "%~dp0..\..\..\.tools\android-sdk\platform-tools\adb.exe" set "EPRINT_ADB=%~dp0..\..\..\.tools\android-sdk\platform-tools\adb.exe"
+if not defined EPRINT_ADB (
+    echo adb.exe not found. Set ANDROID_HOME or add platform-tools to PATH.
+    exit /b 1
+)
+if not "%~1"=="" (
+    "%EPRINT_ADB%" connect "%~1"
+    if errorlevel 1 exit /b 1
+)
+"%EPRINT_ADB%" devices -l
+exit /b %ERRORLEVEL%

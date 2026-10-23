@@ -1,0 +1,110 @@
+{
+  "recordedOn": "2026-10-24",
+  "licenses": [
+    {
+      "file": "licenses/Android-NDK-r27d-NOTICE.txt",
+      "source": "https://android.googlesource.com/platform/ndk/+/refs/tags/ndk-r27d/",
+      "sha256": "f96f763beb66a7ba7a667647fc64c0226ace875e590c831fdd9579ec1c1d91e1"
+    },
+    {
+      "file": "licenses/Apache-2.0.txt",
+      "source": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    {
+      "file": "licenses/Hamcrest-1.3.txt",
+      "source": "https://raw.githubusercontent.com/hamcrest/JavaHamcrest/hamcrest-java-1.3/LICENSE.txt",
+      "sha256": "1cde867cab5c8e842929da5391cef98b4017314822270e934e8e2eef3767c666"
+    },
+    {
+      "file": "licenses/JSON-java-20240303.txt",
+      "source": "https://raw.githubusercontent.com/stleary/JSON-java/20240303/LICENSE",
+      "sha256": "86cc84f1773e3318ba26fd61b3ae508a167df38b361695e105f6e499e7a2736f"
+    },
+    {
+      "file": "licenses/JUnit-4.13.2.txt",
+      "source": "https://raw.githubusercontent.com/junit-team/junit4/r4.13.2/LICENSE-junit.txt",
+      "sha256": "9648bb2891b9813970bddb68d4be8a5e6ec8280d0180a53dfb29236b579c55bb"
+    },
+    {
+      "file": "licenses/LLVM-libcxx.txt",
+      "source": "https://raw.githubusercontent.com/llvm/llvm-project/llvmorg-18.1.8/libcxx/LICENSE.TXT",
+      "sha256": "539dd7aed86e8a4f12cbdd0e6c50c189c7d74847e4fecc64ce2c6ee3a01da38b"
+    },
+    {
+      "file": "licenses/MNN-3.6.1.txt",
+      "source": "https://raw.githubusercontent.com/alibaba/MNN/3.6.1/LICENSE.txt",
+      "sha256": "a830d59c4f98d110e0540d0581efada06192ba6e798434307d1794b07a290302"
+    },
+    {
+      "file": "licenses/MNN-Protobuf.txt",
+      "source": "https://raw.githubusercontent.com/alibaba/MNN/3.6.1/3rd_party/protobuf/LICENSE",
+      "sha256": "6e5e117324afd944dcf67f36cf329843bc1a92229a8cd9bb573d7a83130fea7d"
+    },
+    {
+      "file": "licenses/MNN-RapidJSON.txt",
+      "source": "https://raw.githubusercontent.com/alibaba/MNN/3.6.1/3rd_party/rapidjson/license.txt",
+      "sha256": "a140e5d46fe734a1c78f1a3c3ef207871dd75648be71fdda8e309b23ab8b1f32"
+    },
+    {
+      "file": "licenses/MNN-Skia.txt",
+      "source": "https://raw.githubusercontent.com/alibaba/MNN/3.6.1/3rd_party/lic/skia_license",
+      "sha256": "d27678cba0d529e77201e2d2a053628143e986aad8f1e77f7039ad4366c8f978"
+    },
+    {
+      "file": "licenses/MNN-TensorFlow.txt",
+      "source": "https://raw.githubusercontent.com/alibaba/MNN/3.6.1/3rd_party/lic/tensorflow_license",
+      "sha256": "9dc6ae3884ee868d517aa040c43b68cf08a9481cb8540a672b4703dccd592747"
+    },
+    {
+      "file": "licenses/MNN-flatbuffers.txt",
+      "source": "https://raw.githubusercontent.com/alibaba/MNN/3.6.1/3rd_party/flatbuffers/LICENSE.txt",
+      "sha256": "7ec9661a8afafab1eee3523d6f1a193eff76314a5ab10b4ce96aefd87621b0c3"
+    },
+    {
+      "file": "licenses/MNN-half.txt",
+      "source": "https://raw.githubusercontent.com/alibaba/MNN/3.6.1/3rd_party/half/LICENSE.txt",
+      "sha256": "1269110471a5506d5cc9c115c57b855206f69a90cc57bbbf27860907067ed946"
+    },
+    {
+      "file": "licenses/ONNX-Runtime-1.22.0.txt",
+      "source": "https://raw.githubusercontent.com/microsoft/onnxruntime/v1.22.0/LICENSE",
+      "sha256": "2f07c72751aed99790b8a4869cf2311df85a860b22ded05fa22803587a48922c"
+    },
+    {
+      "file": "licenses/ONNX-Runtime-ThirdPartyNotices.txt",
+      "source": "https://raw.githubusercontent.com/microsoft/onnxruntime/v1.22.0/ThirdPartyNotices.txt",
+      "sha256": "e9e90971a8e75a9a8ac0c6412e29c1202d079998389915aa485f46c816c3b4cc"
+    },
+    {
+      "file": "licenses/OpenCV-4.10.0.txt",
+      "source": "https://raw.githubusercontent.com/opencv/opencv/4.10.0/LICENSE",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    {
+      "file": "licenses/PaddleOCR.txt",
+      "source": "https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/main/LICENSE",
+      "sha256": "3840c5c0c61c294264d2dd77b8777be6ddd90121ef4e0e64abcd22edea581d6e"
+    },
+    {
+      "file": "licenses/RapidOCR.txt",
+      "source": "https://raw.githubusercontent.com/RapidAI/RapidOCR/v3.9.0/LICENSE",
+      "sha256": "3e0af25fdd06aa9586ae97adb00ea927ebe5a3805ac77d2d3a81ce5f55693333"
+    },
+    {
+      "file": "licenses/ZXing-3.5.3.txt",
+      "source": "https://raw.githubusercontent.com/zxing/zxing/zxing-3.5.3/LICENSE",
+      "sha256": "3f62881f0566227a24b12e5a754cc79f39aaa94883038e95c94812e1f50af42f"
+    },
+    {
+      "file": "licenses/ZXing-Embedded-4.3.0.txt",
+      "source": "https://raw.githubusercontent.com/journeyapps/zxing-android-embedded/v4.3.0/COPYING",
+      "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+    },
+    {
+      "file": "licenses/nlohmann-json-3.11.3.txt",
+      "source": "https://raw.githubusercontent.com/nlohmann/json/v3.11.3/LICENSE.MIT",
+      "sha256": "86b998c792894ccb911a1cb7994f7a9652894e7a094c0b5e45be2f553f45cf14"
+    }
+  ]
+}

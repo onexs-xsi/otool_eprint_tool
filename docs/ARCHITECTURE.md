@@ -1,5 +1,7 @@
 # 原生 Android 架构
 
+> 2026-10-24 源码发布整理：内置授权令牌与默认授权开关已移除，旧配置不再读取；当前只保留用户明确提供的自定义令牌。下文较早的计划和验证记录属于历史背景，不代表仍分发内置授权数据。
+
 ## 设计原则
 
 1. 离线优先：应用不申请 `INTERNET` 权限，不依赖远程页面、CDN、账号或云服务。
@@ -169,7 +171,7 @@ PrinterConnectionService + BluetoothPrinterManager / UsbPrinterManager
 
 | 编号 | 计划项 | 完成条件 | 状态 | 实际结果/证据 | 回写日期 |
 |---|---|---|---|---|---|
-| 2A.1 | 默认密钥表 | 内置资料中的 8 组 `helloToken/loginToken`，仅用于离线兜底 | [x] 完成 | 结果：`DothanAuthHandshake` 内置 8 组，`[removed embedded credential]` 已补全 | 260818 |
+| 2A.1 | 默认密钥表 | 内置资料中的 8 组 `helloToken/loginToken`，仅用于离线兜底 | [x] 完成 | 结果：`DothanAuthHandshake` 内置 8 组，`[已移除的内置授权数据]` 已补全 | 260818 |
 | 2A.2 | 握手发送 | 按资料规则发送 `0x9E + helloToken`，不依赖网络 | [x] 完成（实验性） | 结果：仅显式启用内置令牌或配置自定义 token 时发送；默认关闭 | 260818 |
 | 2A.3 | 握手回执 | 解析 `0x9F` 并比较 `loginToken`，匹配/不匹配/超时分别处理 | [x] 完成 | 结果：`handleDothanAuthReply` 匹配/不匹配/超时路径已接入 | 260818 |
 | 2A.4 | 状态与回退 | 握手状态机纳入打印状态机；无 token 时安全跳过 | [x] 完成（实验性） | 结果：默认跳过；用户显式 token 优先于内置令牌 | 260818 |
