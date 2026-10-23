@@ -30,6 +30,17 @@
 # Private signing material
 *.jks
 *.keystore
+*.p12
+*.pfx
+*.key
+*.pem
+
+# Local credentials and portable history backups
+.env
+.env.*
+!.env.example
+!.env.sample
+*.bundle
 
 # IDE / OS
 .idea/

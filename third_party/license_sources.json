@@ -105,6 +105,112 @@
       "file": "licenses/nlohmann-json-3.11.3.txt",
       "source": "https://raw.githubusercontent.com/nlohmann/json/v3.11.3/LICENSE.MIT",
       "sha256": "86b998c792894ccb911a1cb7994f7a9652894e7a094c0b5e45be2f553f45cf14"
+    },
+    {
+      "file": "licenses/OpenCV-cpufeatures.txt",
+      "source": "https://raw.githubusercontent.com/opencv/opencv/4.10.0/3rdparty/cpufeatures/LICENSE",
+      "sha256": "c870d52f42a8f93023b99a85fe68d02637d6b04e5f35bbcd7f98759adb4e4d49"
+    },
+    {
+      "file": "licenses/OpenCV-Protobuf.txt",
+      "source": "https://raw.githubusercontent.com/opencv/opencv/4.10.0/3rdparty/protobuf/LICENSE",
+      "sha256": "6e5e117324afd944dcf67f36cf329843bc1a92229a8cd9bb573d7a83130fea7d"
+    },
+    {
+      "file": "licenses/OpenCV-ITT-BSD.txt",
+      "source": "https://raw.githubusercontent.com/opencv/opencv/4.10.0/3rdparty/ittnotify/src/ittnotify/LICENSE.BSD",
+      "sha256": "77cf47aa88df151faba9db8bbbfcff8e83dbe5f0ff0dac3ef76e63217f579a55"
+    },
+    {
+      "file": "licenses/OpenCV-libjpeg-turbo.txt",
+      "source": "https://raw.githubusercontent.com/opencv/opencv/4.10.0/3rdparty/libjpeg-turbo/LICENSE.md",
+      "sha256": "e548c96c0c09397c94b5c5531836c02ff2c403f1f2b130cad8e3ec9439b5a7cc"
+    },
+    {
+      "file": "licenses/OpenCV-IJG.txt",
+      "source": "https://raw.githubusercontent.com/opencv/opencv/4.10.0/3rdparty/libjpeg-turbo/README.ijg",
+      "sha256": "5c1f9094835d21f66ee0e9ce81c57264d2dd50801b19832d6723dc8cdbda080e"
+    },
+    {
+      "file": "licenses/OpenCV-libwebp.txt",
+      "source": "https://raw.githubusercontent.com/opencv/opencv/4.10.0/3rdparty/libwebp/COPYING",
+      "sha256": "5aec868f669e384a22372a4e8a1a6cd7d44c64cd451f960ca69cc170d1e13acf"
+    },
+    {
+      "file": "licenses/OpenCV-libpng.txt",
+      "source": "https://raw.githubusercontent.com/opencv/opencv/4.10.0/3rdparty/libpng/LICENSE",
+      "sha256": "7317e078e2d3b5d7ba5a6159e650945153262b44b76f6700f8e9edb261c5143e"
+    },
+    {
+      "file": "licenses/OpenCV-libtiff.txt",
+      "source": "https://raw.githubusercontent.com/opencv/opencv/4.10.0/3rdparty/libtiff/COPYRIGHT",
+      "sha256": "fbd6fed7938541d2c809c0826225fc85e551fdbfa8732b10f0c87e0847acafd7"
+    },
+    {
+      "file": "licenses/OpenCV-OpenJPEG.txt",
+      "source": "https://raw.githubusercontent.com/opencv/opencv/4.10.0/3rdparty/openjpeg/LICENSE",
+      "sha256": "a6af136f3e15038a666b61f376612a07d9a4e48cb7c01adbf3e33b3f14ab49b6"
+    },
+    {
+      "file": "licenses/OpenCV-OpenEXR.txt",
+      "source": "https://raw.githubusercontent.com/opencv/opencv/4.10.0/3rdparty/openexr/LICENSE",
+      "sha256": "14eba5f05238f57c77e94f0ebd29a0b3736ba0456ff990cda16e21b6903ac453"
+    },
+    {
+      "file": "licenses/OpenCV-Carotene.txt",
+      "source": "https://raw.githubusercontent.com/opencv/opencv/4.10.0/3rdparty/carotene/include/carotene/definitions.hpp",
+      "sha256": "90737e4d135451d474c5617217d425b2b3e0895d4ea6e76f88585673ab9fbf26",
+      "extraction": "Complete leading copyright/license comment; implementation omitted."
+    },
+    {
+      "file": "licenses/OpenCV-ADE-0.1.2d.txt",
+      "source": "https://raw.githubusercontent.com/opencv/ade/v0.1.2d/LICENSE",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    {
+      "file": "licenses/OpenCV-oneTBB-2021.11.0.txt",
+      "source": "https://raw.githubusercontent.com/oneapi-src/oneTBB/v2021.11.0/LICENSE.txt",
+      "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+    },
+    {
+      "file": "licenses/Halide-reference-v14.txt",
+      "source": "https://raw.githubusercontent.com/Halide/Halide/v14.0.0/LICENSE.txt",
+      "sha256": "df5d821a6c45e2213bc86e50328d5357b57f422d0bb9165989a9ceb3477fe9b1"
+    },
+    {
+      "file": "licenses/MNN-cpp-httplib-0.26.0.txt",
+      "source": "https://raw.githubusercontent.com/yhirose/cpp-httplib/v0.26.0/LICENSE",
+      "sha256": "4b45cbe16d7b71b89ae6127e26e0d90a029198ca5e958ad8e3d0b8bbed364d8b"
+    },
+    {
+      "file": "licenses/OpenCV-FlatBuffers.txt",
+      "source": "https://raw.githubusercontent.com/opencv/opencv/4.10.0/3rdparty/flatbuffers/LICENSE.txt",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    {
+      "file": "licenses/OpenCV-Tegra-HAL.txt",
+      "source": "https://raw.githubusercontent.com/opencv/opencv/4.10.0/3rdparty/carotene/hal/tegra_hal.hpp",
+      "sha256": "c0343ef9c6a2c9e435e58e78806a68f6a6edbf67991f64e922a4694e442baf98",
+      "extraction": "Complete leading copyright/license comment; implementation omitted."
+    },
+    {
+      "file": "licenses/RapidOCR-model-card-v3.9.2.txt",
+      "source": "https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.9.2/README.md",
+      "sha256": "3dc91bb3cb667df783178917d69b38bfabb8c935596f34243a1c9f0d36916b6e",
+      "scope": "Publisher model-card metadata explicitly states license: Apache License 2.0. Raw upstream bytes preserved, including malformed non-ASCII template comments."
+    },
+    {
+      "file": "licenses/OpenCV-oneTBB-2021.11.0-ThirdPartyPrograms.txt",
+      "source": "https://raw.githubusercontent.com/oneapi-src/oneTBB/v2021.11.0/third-party-programs.txt",
+      "scope": "Complete unmodified release-level third-party program inventory; inclusion does not establish linkage of every item. Raw upstream non-UTF-8 bytes preserved.",
+      "sha256": "b10997cc50652ba6ab365e3bc43e13057681cd4a56533b46171529bd249749f3"
+    },
+    {
+      "file": "licenses/OpenCV-ITT-source-header.txt",
+      "source": "https://raw.githubusercontent.com/opencv/opencv/4.10.0/3rdparty/ittnotify/src/ittnotify/ittnotify_static.c",
+      "extraction": "Complete leading dual-license copyright comment, including full BSD alternative, Copyright (c) 2005-2014 Intel Corporation; implementation omitted.",
+      "sourceSha256": "b81198f2b7b5fd4b1440efd87a97a9fb6546c49c56601d7b21c3ba012d0bd62b",
+      "sha256": "1ef2b480e6016ff3ea64ba9ee82d82b693a7a2bb27d6264742513f235aa347c2"
     }
   ]
 }

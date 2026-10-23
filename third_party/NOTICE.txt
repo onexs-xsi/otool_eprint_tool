@@ -1,7 +1,8 @@
 EPrint third-party acknowledgements
 
 The project MIT license does not replace the licenses of these components.
-This notice and the licenses/ directory are included in locally built APK assets.
+The current Gradle source configures this directory as APK assets. Verify the
+actual notices and licenses in any APK before distributing that APK.
 The full inventory is in THIRD_PARTY_NOTICES.md in the source repository.
 
 MNN 3.6.1, including MNN Express, MNN LLM, headers and the JNI implementation reference:
@@ -9,6 +10,16 @@ Copyright Alibaba Group Holding Limited. Apache License 2.0.
 https://github.com/alibaba/MNN/tree/3.6.1
 EPrint modifies the JNI session wrapper, streaming, cancellation and metrics.
 MNN third-party components retain their own copyright and license notices.
+The shipped libllm binary contains cpp-httplib and jinja symbol names.
+MNN 3.6.1 source identifies cpp-httplib 0.26.0, Copyright (c) 2025 Yuji Hirose,
+MIT License; the upstream LICENSE also credits Copyright (c) 2017 yhirose.
+See MNN-cpp-httplib-0.26.0.txt. The binary's exact httplib version is unverified.
+jinja.cpp 0.0.1, https://github.com/wangzhaode/jinja.cpp, Apache License 2.0.
+Skia-derived Matrix.h / Rect.h retain Copyright 2006 The Android Open Source
+Project and BSD notices; see their original headers and MNN-Skia.txt.
+Halide-derived runtime declarations retain MIT notices in Halide-reference-v14.txt;
+MNN does not record the original imported Halide revision. This license reference
+does not establish that the imported code came from Halide v14.
 
 JSON for Modern C++ 3.11.3:
 Copyright (c) 2013-2023 Niels Lohmann. MIT License.
@@ -27,6 +38,20 @@ ZXing and ZXing Android Embedded: ZXing Authors and Journey Mobile / JourneyApps
 Apache License 2.0; see the corresponding license files for additional notices.
 ONNX Runtime: Copyright Microsoft Corporation. MIT License and ThirdPartyNotices.
 OpenCV: Copyright OpenCV contributors. Apache License 2.0 and component notices.
+The OpenCV Android arm64 binary reports linked cpufeatures, Protobuf, ADE,
+oneTBB, Intel ITT, libjpeg-turbo, libwebp, libpng, libtiff, OpenJPEG, OpenEXR,
+Carotene/Tegra HAL, and builtin FlatBuffers. See the OpenCV-* license files.
+OpenCV-vendored ITT permits either BSD or GPLv2; the BSD option is used here.
+Its complete source header credits Copyright (c) 2005-2014 Intel Corporation;
+see OpenCV-ITT-source-header.txt as well as OpenCV-ITT-BSD.txt.
+The complete oneTBB v2021.11.0 third-party-programs.txt is also preserved as
+OpenCV-oneTBB-2021.11.0-ThirdPartyPrograms.txt, including all license conditions
+and the GCC Runtime Library Exception. This is a whole-release inventory;
+it does not establish that every listed component is linked into this binary
+or that the presence of GPL text makes GPL terms applicable to EPrint.
+This software is based in part on the work of the Independent JPEG Group.
+See native_components.json for binary hashes, build information, source evidence
+and limitations. Tagged source licenses do not reconstruct exact binary inputs.
 
 Test-only dependencies, including JUnit, Hamcrest and JSON-java, retain their
 own licenses and are not app runtime components; see dependencies.json.

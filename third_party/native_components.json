@@ -1,0 +1,67 @@
+{
+  "recordedOn": "2026-10-24",
+  "scope": "Observed native components; not a complete link map or legal clearance",
+  "opencv": {
+    "coordinate": "org.opencv:opencv:4.10.0",
+    "aarSha256": "eb2bdae229c761769d459bd42c991bdcecb4da04f7b54dcb2aa9e2cb1dc68ec0",
+    "nativeEntry": "jni/arm64-v8a/libopencv_java4.so",
+    "nativeSha256": "048003cd5b07f9ebbd28856889afb3d29989ebb612e3f1d4a291fe2b68680421",
+    "buildInfo": "General configuration for OpenCV 4.10.0 =====================================\n  Version control:               4.10.0-dirty\n\n  Platform:\n    Timestamp:                   2024-06-02T16:44:40Z\n    Host:                        Linux 5.4.0-169-generic x86_64\n    Target:                      Android 1 aarch64\n    CMake:                       3.22.1-g37088a8\n    CMake generator:             Ninja\n    CMake build tool:            /opt/android-sdk/cmake/3.22.1/bin/ninja\n    Configuration:               Release\n\n  CPU/HW features:\n    Baseline:                    NEON FP16\n    Dispatched code generation:  NEON_DOTPROD NEON_FP16 NEON_BF16\n      requested:                 NEON_FP16 NEON_BF16 NEON_DOTPROD\n      NEON_DOTPROD (1 files):    + NEON_DOTPROD\n      NEON_FP16 (2 files):       + NEON_FP16\n      NEON_BF16 (0 files):       + NEON_BF16\n\n  C/C++:\n    Built as dynamic libs?:      NO\n    C++ standard:                11\n    C++ Compiler:                /opt/android-sdk/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++  (ver 14.0.7)\n    C++ flags (Release):         -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security     -fsigned-char -W -Wall -Wreturn-type -Wnon-virtual-dtor -Waddress -Wsequence-point -Wformat -Wformat-security -Wmissing-declarations -Wmissing-prototypes -Wstrict-prototypes -Wundef -Winit-self -Wpointer-arith -Wshadow -Wsign-promo -Wuninitialized -Winconsistent-missing-override -Wno-delete-non-virtual-dtor -Wno-unnamed-type-template-args -Wno-comment -Wno-deprecated-enum-enum-conversion -Wno-deprecated-anon-enum-enum-conversion -fdiagnostics-show-option -Qunused-arguments    -fvisibility=hidden -fvisibility-inlines-hidden  -O3 -DNDEBUG   -DNDEBUG\n    C++ flags (Debug):           -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security     -fsigned-char -W -Wall -Wreturn-type -Wnon-virtual-dtor -Waddress -Wsequence-point -Wformat -Wformat-security -Wmissing-declarations -Wmissing-prototypes -Wstrict-prototypes -Wundef -Winit-self -Wpointer-arith -Wshadow -Wsign-promo -Wuninitialized -Winconsistent-missing-override -Wno-delete-non-virtual-dtor -Wno-unnamed-type-template-args -Wno-comment -Wno-deprecated-enum-enum-conversion -Wno-deprecated-anon-enum-enum-conversion -fdiagnostics-show-option -Qunused-arguments    -fvisibility=hidden -fvisibility-inlines-hidden  -fno-limit-debug-info   -O0 -DDEBUG -D_DEBUG -g\n    C Compiler:                  /opt/android-sdk/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/clang\n    C flags (Release):           -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security    -fsigned-char -W -Wall -Wreturn-type -Wnon-virtual-dtor -Waddress -Wsequence-point -Wformat -Wformat-security -Wmissing-declarations -Wmissing-prototypes -Wstrict-prototypes -Wundef -Winit-self -Wpointer-arith -Wshadow -Wsign-promo -Wuninitialized -Winconsistent-missing-override -Wno-delete-non-virtual-dtor -Wno-unnamed-type-template-args -Wno-comment -Wno-deprecated-enum-enum-conversion -Wno-deprecated-anon-enum-enum-conversion -fdiagnostics-show-option -Qunused-arguments    -fvisibility=hidden -fvisibility-inlines-hidden  -O3 -DNDEBUG   -DNDEBUG\n    C flags (Debug):             -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security    -fsigned-char -W -Wall -Wreturn-type -Wnon-virtual-dtor -Waddress -Wsequence-point -Wformat -Wformat-security -Wmissing-declarations -Wmissing-prototypes -Wstrict-prototypes -Wundef -Winit-self -Wpointer-arith -Wshadow -Wsign-promo -Wuninitialized -Winconsistent-missing-override -Wno-delete-non-virtual-dtor -Wno-unnamed-type-template-args -Wno-comment -Wno-deprecated-enum-enum-conversion -Wno-deprecated-anon-enum-enum-conversion -fdiagnostics-show-option -Qunused-arguments    -fvisibility=hidden -fvisibility-inlines-hidden  -fno-limit-debug-info   -O0 -DDEBUG -D_DEBUG -g\n    Linker flags (Release):      -Wl,--build-id=sha1 -Wl,--no-rosegment -Wl,--fatal-warnings -Wl,--no-undefined -Qunused-arguments   -Wl,--as-needed -Wl,--no-undefined -Wl,--gc-sections  \n    Linker flags (Debug):        -Wl,--build-id=sha1 -Wl,--no-rosegment -Wl,--fatal-warnings -Wl,--no-undefined -Qunused-arguments   -Wl,--as-needed -Wl,--no-undefined  \n    ccache:                      YES\n    Precompiled headers:         NO\n    Extra dependencies:          z dl m log\n    3rdparty dependencies:       libcpufeatures libprotobuf ade tbb ittnotify libjpeg-turbo libwebp libpng libtiff libopenjp2 IlmImf tegra_hal\n\n  OpenCV modules:\n    To be built:                 calib3d core dnn features2d flann gapi highgui imgcodecs imgproc java ml objdetect photo stitching video videoio\n    Disabled:                    world\n    Disabled by dependency:      -\n    Unavailable:                 python2 python3 ts\n    Applications:                -\n    Documentation:               NO\n    Non-free algorithms:         NO\n\n  Android NDK:                   /opt/android-sdk/ndk/25.2.9519653 (ver 25.2.9519653)\n    Android ABI:                 arm64-v8a\n    NDK toolchain:               aarch64-linux-android-clang\n    STL type:                    c++_shared\n    Native API level:            21\n  Android SDK:                   /opt/android-sdk (tools:  build tools: 30.0.3)\n\n  GUI:                           NONE\n\n  Media I/O: \n    ZLib:                        z (ver 1.2.12)\n    JPEG:                        build-libjpeg-turbo (ver 3.0.3-70)\n      SIMD Support Request:      YES\n      SIMD Support:              YES\n    WEBP:                        build (ver encoder: 0x020f)\n    PNG:                         build (ver 1.6.43)\n      SIMD Support Request:      YES\n      SIMD Support:              YES (Arm NEON)\n    TIFF:                        build (ver 42 - 4.6.0)\n    JPEG 2000:                   build (ver 2.5.0)\n    OpenEXR:                     build (ver 2.3.0)\n    HDR:                         YES\n    SUNRASTER:                   YES\n    PXM:                         YES\n    PFM:                         YES\n\n  Video I/O:\n   MEDIANDK:                     YES\n   NDK Camera:                   NO\n\n  Parallel framework:            TBB (ver 2021.11 interface 12110)\n\n  Trace:                         YES (with Intel ITT)\n\n  Other third-party libraries:\n    Custom HAL:                  YES (carotene (ver 0.0.1, Auto detected))\n    Protobuf:                    build (3.19.1)\n    Flatbuffers:                 builtin/3rdparty (23.5.9)\n\n  Python (for build):            /usr/bin/python3\n\n  Java:                          export all functions\n    ant:                         NO\n    Java wrappers:               YES ()\n    Java tests:                  NO\n\n  Install to:                    /home/ci/build/o4a/install\n-----------------------------------------------------------------\n\n",
+    "sourceTag": "https://github.com/opencv/opencv/tree/4.10.0",
+    "caveat": "Binary reports 4.10.0-dirty. Notices use tagged sources and versions explicitly reported by the binary; this does not prove exact build inputs. ADE v0.1.2d is the tagged OpenCV build recipe default, not a revision embedded in this binary. System zlib is linked as Android libz, not treated here as a bundled OpenCV archive. ITT is dual BSD/GPLv2; BSD terms selected as permitted by ittnotify_static.c.",
+    "licenseFiles": [
+      "OpenCV-cpufeatures.txt",
+      "OpenCV-Protobuf.txt",
+      "OpenCV-ITT-BSD.txt",
+      "OpenCV-libjpeg-turbo.txt",
+      "OpenCV-IJG.txt",
+      "OpenCV-libwebp.txt",
+      "OpenCV-libpng.txt",
+      "OpenCV-libtiff.txt",
+      "OpenCV-OpenJPEG.txt",
+      "OpenCV-OpenEXR.txt",
+      "OpenCV-Carotene.txt",
+      "OpenCV-ADE-0.1.2d.txt",
+      "OpenCV-oneTBB-2021.11.0.txt",
+      "OpenCV-FlatBuffers.txt",
+      "OpenCV-Tegra-HAL.txt",
+      "OpenCV-oneTBB-2021.11.0-ThirdPartyPrograms.txt",
+      "OpenCV-ITT-source-header.txt"
+    ],
+    "oneTbbThirdPartyEvidence": {
+      "releaseNotice": "licenses/OpenCV-oneTBB-2021.11.0-ThirdPartyPrograms.txt",
+      "scope": "Whole oneTBB v2021.11.0 release inventory, not a list of components proven linked into this OpenCV binary. All upstream conditions and exceptions are preserved.",
+      "sourceChecks": [
+        {
+          "source": "https://github.com/oneapi-src/oneTBB/blob/v2021.11.0/src/tbb/itt_notify.cpp",
+          "observation": "Includes tools_api/ittnotify_static.c; oneTBB has its own ITT source path in addition to the separate OpenCV ittnotify component."
+        },
+        {
+          "source": "https://github.com/oneapi-src/oneTBB/blob/v2021.11.0/src/tbb/exception.cpp",
+          "observation": "The GCC bug 62258 workaround is guarded by __GLIBCXX__, libstdc++ version >=40700 and <60000, and TBB_USE_EXCEPTIONS.",
+          "inference": "The OpenCV binary reports Android Clang 14.0.7 with c++_shared, so this source condition does not itself establish that the workaround is linked. Exact dirty binary inputs were not reconstructed."
+        }
+      ],
+      "licenseInterpretationLimit": "Saving a release-level notice with GPL text and the complete GCC Runtime Library Exception does not by itself establish that the listed code is linked or that GPL terms apply to EPrint."
+    },
+    "ittBsdSelectionEvidence": {
+      "source": "https://github.com/opencv/opencv/blob/4.10.0/3rdparty/ittnotify/src/ittnotify/ittnotify_static.c",
+      "savedHeader": "licenses/OpenCV-ITT-source-header.txt",
+      "scope": "OpenCV vendored ittnotify source explicitly permits either BSD or GPLv2; the complete BSD alternative and Copyright (c) 2005-2014 Intel Corporation are preserved. This is separate from oneTBB release-level ITT notices."
+    }
+  },
+  "mnn": {
+    "version": "3.6.1 distribution",
+    "observedIn": "apps/android/app/src/main/jniLibs/arm64-v8a/libllm.so",
+    "observations": [
+      "httplib C++ symbol names",
+      "jinja C++ symbol names"
+    ],
+    "sourceEvidence": [
+      "https://github.com/alibaba/MNN/blob/3.6.1/transformers/llm/engine/src/httplib.h",
+      "https://github.com/alibaba/MNN/blob/3.6.1/transformers/llm/engine/src/tokenizer/jinja.hpp",
+      "https://github.com/alibaba/MNN/blob/3.6.1/transformers/llm/engine/CMakeLists.txt"
+    ],
+    "caveat": "Official archive byte match proves packaged file identity, not all statically linked third-party inputs. Imported Halide header does not record its original Halide revision; v14.0.0 license is an upstream reference for matching runtime declarations/comments. cpp-httplib 0.26.0 is the version in the tagged MNN source; an exact version string was not found in the binary."
+  }
+}

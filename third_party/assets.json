@@ -227,10 +227,11 @@
       "path": "apps/android/app/src/main/cpp/include/MNN/HalideRuntime.h",
       "component": "MNN headers",
       "version": "3.6.1",
-      "license": "Apache-2.0",
+      "license": "Apache-2.0 AND MIT (Halide-derived runtime declarations)",
       "source": "https://github.com/alibaba/MNN/tree/3.6.1",
       "bytes": 11476,
-      "sha256": "f1d35170fa3fc1c7433ca1d18ca5d016ad230f26a0ecfba91b9a7ef9a49f7a37"
+      "sha256": "f1d35170fa3fc1c7433ca1d18ca5d016ad230f26a0ecfba91b9a7ef9a49f7a37",
+      "licenseEvidence": "licenses/Halide-reference-v14.txt; original Halide revision not recorded by MNN"
     },
     {
       "path": "apps/android/app/src/main/cpp/include/MNN/ImageProcess.hpp",
@@ -254,10 +255,11 @@
       "path": "apps/android/app/src/main/cpp/include/MNN/Matrix.h",
       "component": "MNN headers",
       "version": "3.6.1",
-      "license": "Apache-2.0",
+      "license": "Apache-2.0 AND BSD-3-Clause (Skia-derived portions)",
       "source": "https://github.com/alibaba/MNN/tree/3.6.1",
       "bytes": 55948,
-      "sha256": "4becb851c912f987b895b08c0b10743f107430c8552a34da9bac3c447c692d1e"
+      "sha256": "4becb851c912f987b895b08c0b10743f107430c8552a34da9bac3c447c692d1e",
+      "licenseEvidence": "licenses/MNN-Skia.txt; original source copyright headers retained"
     },
     {
       "path": "apps/android/app/src/main/cpp/include/MNN/MNNDefine.h",
@@ -317,10 +319,11 @@
       "path": "apps/android/app/src/main/cpp/include/MNN/Rect.h",
       "component": "MNN headers",
       "version": "3.6.1",
-      "license": "Apache-2.0",
+      "license": "Apache-2.0 AND BSD-3-Clause (Skia-derived portions)",
       "source": "https://github.com/alibaba/MNN/tree/3.6.1",
       "bytes": 18903,
-      "sha256": "cec3ec954565d2e03bb749ac9513b53dae8b2389208b490d9cfa588b2eca1ea4"
+      "sha256": "cec3ec954565d2e03bb749ac9513b53dae8b2389208b490d9cfa588b2eca1ea4",
+      "licenseEvidence": "licenses/MNN-Skia.txt; original source copyright headers retained"
     },
     {
       "path": "apps/android/app/src/main/cpp/include/MNN/Tensor.hpp",
@@ -339,6 +342,24 @@
       "source": "https://github.com/nlohmann/json/tree/v3.11.3",
       "bytes": 919975,
       "sha256": "9bea4c8066ef4a1c206b2be5a36302f8926f7fdc6087af5d20b417d0cf103ea6"
+    },
+    {
+      "path": "apps/android/gradle/wrapper/gradle-wrapper.jar",
+      "component": "Gradle Wrapper",
+      "version": "8.14.3",
+      "license": "Apache-2.0",
+      "source": "https://raw.githubusercontent.com/gradle/gradle/v8.14.3/gradle/wrapper/gradle-wrapper.jar",
+      "bytes": 43764,
+      "sha256": "7d3a4ac4de1c32b59bc6a4eb8ecb8e612ccd0cf1ae1e99f66902da64df296172"
     }
-  ]
+  ],
+  "modelLicenseEvidence": {
+    "publisher": "RapidAI/RapidOCR",
+    "revision": "v3.9.2",
+    "source": "https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.9.2/README.md",
+    "licenseDeclaration": "Apache License 2.0",
+    "savedAs": "licenses/RapidOCR-model-card-v3.9.2.txt",
+    "sha256": "3dc91bb3cb667df783178917d69b38bfabb8c935596f34243a1c9f0d36916b6e",
+    "scope": "Publisher declaration for hosted model repository; does not verify rights in training data."
+  }
 }
